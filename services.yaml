@@ -1,0 +1,25 @@
+services:
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    container_name: remas-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - remas
+  
+  prometheus-process-exporter:
+    image: ncabatoff/process-exporter:latest
+    container_name: remas-prometheus-process-exporter
+    ports:
+      - "9256:9256"
+    volumes:
+      - /proc:/host/proc:ro
+      - ./prometheus/process-exporter-config/process-exporter-config.yml:/config/process-exporter-config.yml
+    command: --procfs /host/proc -config.path /config/process-exporter-config.yml
+    networks:
+      - remas
+
+networks:
+  remas:
