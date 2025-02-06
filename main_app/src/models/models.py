@@ -26,6 +26,10 @@ class User(SQLModel, table=True):
     limits: list[Limit] = Relationship(back_populates="user")
     tasks: list[Task] = Relationship(back_populates="user")
     tags: list[TaskTag] = Relationship(back_populates="user")
+    created_notifications: list[Notification] = Relationship(
+        back_populates="owner",
+        description="Notifications created by the user"
+    )
 
 class Group(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
@@ -158,7 +162,9 @@ class Event(SQLModel, table=True):
 
     task_id: int = Field(default=None, foreign_key="task.id")
     task: Task = Relationship(back_populates="events")
-    notifications: list[EventHasNotificaton] = Relationship(back_populates="event")
+    notifications: list[EventHasNotificaton] = Relationship(
+        back_populates="event"
+    )
 
 class Notification(SQLModel, table=True):
     """
@@ -173,7 +179,15 @@ class Notification(SQLModel, table=True):
     )
     notification_content: str | None = None
 
-    events: list[EventHasNotificaton] = Relationship(back_populates="notification")
+    owner_id: int = Field(
+        default=None,
+        foreign_key="user.id",
+        description="User that created the notification"
+    )
+    owner: User = Relationship(back_populates="created_notifications")
+    events: list[EventHasNotificaton] = Relationship(
+        back_populates="notification"
+    )
 
 class EventHasNotificaton(SQLModel, table=True):
     """
