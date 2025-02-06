@@ -3,23 +3,40 @@ services:
     image: prom/prometheus:v2.53.3
     container_name: remas-prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     networks:
       - remas
+    restart: unless-stopped
   
   prometheus-process-exporter:
     image: ncabatoff/process-exporter:latest
     container_name: remas-prometheus-process-exporter
     ports:
-      - "9256:9256"
+      - "127.0.0.1:9256:9256"
     volumes:
       - /proc:/host/proc:ro
       - ./prometheus/process-exporter-config/process-exporter-config.yml:/config/process-exporter-config.yml
     command: --procfs /host/proc -config.path /config/process-exporter-config.yml
     networks:
       - remas
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17
+    container_name: remas-postgres
+    environment:
+      POSTGRES_USER: remas_main
+      POSTGRES_PASSWORD: test123
+      POSTGRES_DB: remas_main_db
+    volumes:
+      - ./postgres-data/data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:15432:5432"
+    networks:
+      - remas
+    restart: unless-stopped
 
 networks:
   remas:
