@@ -1,10 +1,11 @@
-from typing import Literal
+from typing import Literal, Optional
 from sqlmodel import (
     Field,
     SQLModel,
     Relationship,
     create_engine
 )
+import enum
 from datetime import (
     datetime,
     timedelta
@@ -21,14 +22,14 @@ class User(SQLModel, table=True):
 
     # User is by default member of group 2 ("users")
     group_id: int = Field(default=2, foreign_key="group.id")
-    group: Group = Relationship(back_populates="users")
+    group: "Group" = Relationship(back_populates="members")
 
-    limits: list[Limit] = Relationship(back_populates="user")
-    tasks: list[Task] = Relationship(back_populates="user")
-    tags: list[TaskTag] = Relationship(back_populates="user")
-    created_notifications: list[Notification] = Relationship(
-        back_populates="owner",
-        description="Notifications created by the user"
+    limits: list["Limit"] = Relationship(back_populates="user")
+    tasks: list["Task"] = Relationship(back_populates="owner")
+    tags: list["TaskTag"] = Relationship(back_populates="user")
+    # Notifications created by this user
+    created_notifications: list["Notification"] = Relationship(
+        back_populates="owner"
     )
 
 class Group(SQLModel, table=True):
@@ -39,11 +40,11 @@ class Group(SQLModel, table=True):
 
     # Self reference - parent / child relationship
     parent_id: int | None = Field(default=None, foreign_key='group.id')
-    parent: Group | None = Relationship(back_populates='children')
-    children: list[Group] = Relationship(back_populates='parent')
+    parent: Optional["Group"] = Relationship(back_populates='children')
+    children: list["Group"] = Relationship(back_populates='parent')
 
-    users: list[User] = Relationship(back_populates="group")
-    limits: list[Limit] = Relationship(back_populates="group")
+    members: list[User] = Relationship(back_populates="group")
+    limits: list["Limit"] = Relationship(back_populates="group")
 
 class Node(SQLModel, table=True):
     """
@@ -53,11 +54,11 @@ class Node(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     description: str | None = None
 
-    resources: list[NodeProvidesResource] = Relationship(back_populates="node")
-    resource_allocations: list[ResourceAllocation] = Relationship(
+    resources: list["NodeProvidesResource"] = Relationship(back_populates="node")
+    resource_allocations: list["ResourceAllocation"] = Relationship(
         back_populates="node"
     )
-    limits: list[NodeIsLimitedBy] = Relationship(back_populates="node")
+    limits: list["NodeIsLimitedBy"] = Relationship(back_populates="node")
 
 class Resource(SQLModel, table=True):
     """
@@ -67,12 +68,12 @@ class Resource(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     description: str | None = None
 
-    nodes: list[NodeProvidesResource] = Relationship(back_populates="resource")
-    resource_allocations: list[ResourceAllocation] = Relationship(
+    nodes: list["NodeProvidesResource"] = Relationship(back_populates="resource")
+    resource_allocations: list["ResourceAllocation"] = Relationship(
         back_populates="resource"
     )
-    limits: list[Limit] = Relationship(back_populates="resource")
-    aliases: list[ResourceHasAlias] = Relationship(back_populates="resource")
+    limits: list["Limit"] = Relationship(back_populates="resource")
+    aliases: list["ResourceHasAlias"] = Relationship(back_populates="resource")
 
 class ResourceAlias(SQLModel, table=True):
     """
@@ -82,14 +83,22 @@ class ResourceAlias(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     description: str | None = None
 
-    resources: list[ResourceHasAlias] = Relationship(back_populates="alias")
+    resources: list["ResourceHasAlias"] = Relationship(back_populates="alias")
 
 class ResourceHasAlias(SQLModel, table=True):
     """
     Connection table between resource and alias.
     """
-    resource_id: int = Field(default=None, foreign_key="resource.id")
-    alias_id: int = Field(default=None, foreign_key="resource_alias.id")
+    resource_id: int = Field(
+        default=None,
+        foreign_key="resource.id",
+        primary_key=True
+    )
+    alias_id: int = Field(
+        default=None,
+        foreign_key="resourcealias.id",
+        primary_key=True
+    )
 
     resource: Resource = Relationship(back_populates="aliases")
     alias: ResourceAlias = Relationship(back_populates="resources")
@@ -99,8 +108,16 @@ class NodeProvidesResource(SQLModel, table=True):
     Connection table for node and resource. Defines how much of a resource
     is provided by a node (for example 2 GPUs).
     """
-    node_id: int = Field(default=None, foreign_key="node.id")
-    resource_id: int = Field(default=None, foreign_key="resource.id")
+    node_id: int = Field(
+        default=None,
+        foreign_key="node.id",
+        primary_key=True
+    )
+    resource_id: int = Field(
+        default=None,
+        foreign_key="resource.id",
+        primary_key=True
+    )
     amount: int
 
     node: Node = Relationship(back_populates="resources")
@@ -111,14 +128,26 @@ class ResourceAllocation(SQLModel, table=True):
     ResourceAllocation is a connection table between node, resource and task.
     Tells how much of a resource is used by a task on a node.
     """
-    node_id: int = Field(default=None, foreign_key="node.id")
-    resource_id: int = Field(default=None, foreign_key="resource.id")
-    task_id: int = Field(default=None, foreign_key="task.id")
+    task_id: int = Field(
+        default=None,
+        foreign_key="task.id",
+        primary_key=True
+    )
+    node_id: int = Field(
+        default=None,
+        foreign_key="node.id",
+        primary_key=True
+    )
+    resource_id: int = Field(
+        default=None,
+        foreign_key="resource.id",
+        primary_key=True
+    )
     amount: int
 
+    task: "Task" = Relationship(back_populates="resource_allocations")
     node: Node = Relationship(back_populates="resource_allocations")
     resource: Resource = Relationship(back_populates="resource_allocations")
-    task: Task = Relationship(back_populates="resource_allocations")
 
 class Task(SQLModel, table=True):
     """
@@ -128,14 +157,14 @@ class Task(SQLModel, table=True):
     name: str = Field(unique=True, index=True)
     description: str | None = None
 
-    user_id: int = Field(default=None, foreign_key="user.id")
-    user: User = Relationship(back_populates="tasks", description="Task owner")
+    owner_id: int = Field(default=None, foreign_key="user.id")
+    owner: User = Relationship(back_populates="tasks")
 
     resource_allocations: list[ResourceAllocation] = Relationship(
         back_populates="task"
     )
-    tags: list[TaskTag] = Relationship(back_populates="tasks")
-    events: list[Event] = Relationship(back_populates="task")
+    tags: list["TaskTag"] = Relationship(back_populates="tasks")
+    events: list["Event"] = Relationship(back_populates="task")
 
 class TaskTag(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
@@ -144,25 +173,38 @@ class TaskTag(SQLModel, table=True):
 
     user_id: int = Field(default=None, foreign_key="user.id")
     user: User = Relationship(back_populates="tags")
-    tasks: list[TaskHasTag] = Relationship(back_populates="tag")
+    tasks: list["TaskHasTag"] = Relationship(back_populates="tag")
 
 class TaskHasTag(SQLModel, table=True):
-    task_id: int = Field(default=None, foreign_key="task.id")
-    tag_id: int = Field(default=None, foreign_key="task_tag.id")
+    task_id: int = Field(
+        default=None,
+        foreign_key="task.id",
+        primary_key=True
+    )
+    tag_id: int = Field(
+        default=None,
+        foreign_key="tasktag.id",
+        primary_key=True
+    )
 
     task: Task = Relationship(back_populates="tags")
     tag: TaskTag = Relationship(back_populates="tasks")
+
+class EventType(enum.Enum):
+    task_start = "task_start"
+    task_end = "task_end"
+    other = "other"
 
 class Event(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str | None = None
     time: datetime = Field(index=True)
-    type: Literal["task_start", "task_end", "other"] = "other"
+    type: EventType = Field(default=EventType.other)
 
     task_id: int = Field(default=None, foreign_key="task.id")
     task: Task = Relationship(back_populates="events")
-    notifications: list[EventHasNotificaton] = Relationship(
+    notifications: list["EventHasNotificaton"] = Relationship(
         back_populates="event"
     )
 
@@ -173,19 +215,14 @@ class Notification(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str | None = None
-    time_offset: int | None = Field(
-        default=None,
-        description="Time offset in seconds"
-    )
+    # Time offset in seconds
+    time_offset: int | None = Field(default=None)
     notification_content: str | None = None
 
-    owner_id: int = Field(
-        default=None,
-        foreign_key="user.id",
-        description="User that created the notification"
-    )
+    # User that created the notification
+    owner_id: int = Field(default=None, foreign_key="user.id")
     owner: User = Relationship(back_populates="created_notifications")
-    events: list[EventHasNotificaton] = Relationship(
+    events: list["EventHasNotificaton"] = Relationship(
         back_populates="notification"
     )
 
@@ -193,8 +230,16 @@ class EventHasNotificaton(SQLModel, table=True):
     """
     Connection table between event and notification.
     """
-    event_id: int = Field(default=None, foreign_key="event.id")
-    notification_id: int = Field(default=None, foreign_key="notification.id")
+    event_id: int = Field(
+        default=None,
+        foreign_key="event.id",
+        primary_key=True
+    )
+    notification_id: int = Field(
+        default=None,
+        foreign_key="notification.id",
+        primary_key=True
+    )
 
     event: Event = Relationship(back_populates="notifications")
     notification: Notification = Relationship(back_populates="events")
@@ -215,23 +260,31 @@ class Limit(SQLModel, table=True):
 
     resource_id: int = Field(default=None, foreign_key="resource.id")
     resource: Resource = Relationship(back_populates="limits")
-    nodes: list[NodeIsLimitedBy] = Relationship(back_populates="limit")
+    nodes: list["NodeIsLimitedBy"] = Relationship(back_populates="limit")
 
 class NodeIsLimitedBy(SQLModel, table=True):
     """
     Connection table for limit and node.
     """
-    limit_id: int = Field(default=None, foreign_key="limit.id")
-    node_id: int = Field(default=None, foreign_key="node.id")
+    limit_id: int = Field(
+        default=None,
+        foreign_key="limit.id",
+        primary_key=True
+    )
+    node_id: int = Field(
+        default=None,
+        foreign_key="node.id",
+        primary_key=True
+    )
 
     limit: Limit = Relationship(back_populates="nodes")
     node: Node = Relationship(back_populates="limits")
 
 
 def init_db() -> None:
-    from ..config import Settings
+    from src.config import Settings
 
-    engine = create_engine(Settings.database_url, echo=True)
+    engine = create_engine(url=Settings().database_url, echo=True)
     SQLModel.metadata.create_all(engine)
 
 if __name__ == '__main__':
