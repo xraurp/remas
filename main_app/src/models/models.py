@@ -33,6 +33,7 @@ class Group(SQLModel, table=True):
     description: str | None = None
     users_share_statistics: bool = True
 
+    # Self reference - parent / child relationship
     parent_id: int | None = Field(default=None, foreign_key='group.id')
     parent: Group | None = Relationship(back_populates='children')
     children: list[Group] = Relationship(back_populates='parent')
