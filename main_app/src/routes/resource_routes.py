@@ -4,10 +4,12 @@ from src.app_logic.resource_operations import (
     get_resource,
     create_resource,
     update_resource,
-    delete_resource
+    delete_resource,
+    add_resource_alias,
+    remove_resource_alias
 )
 from src.db.models import Resource
-from src.schemas.resource_entities import ResourceResponse
+from src.schemas.resource_entities import ResourceResponse, AliasRequest
 from . import SessionDep
 
 resource_route = APIRouter(
@@ -43,8 +45,8 @@ def resource_update(resource: Resource, session: SessionDep) -> ResourceResponse
     """
     return update_resource(resource=resource, db_session=session)
 
-@resource_route.delete("/{resource_id}")
-def resource_delete(resource_id: int, session: SessionDep):
+@resource_route.delete("/{resource_id}", response_model=dict)
+def resource_delete(resource_id: int, session: SessionDep) -> dict:
     """
     Deletes resource.
     """
@@ -53,3 +55,23 @@ def resource_delete(resource_id: int, session: SessionDep):
         return {'detail': 'Resource deleted'}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@resource_route.post("/add_alias", response_model=ResourceResponse)
+def resource_add_alias(
+    request: AliasRequest,
+    session: SessionDep
+) -> ResourceResponse:
+    """
+    Adds alias to resource
+    """
+    return add_resource_alias(alias_request=request, db_session=session)
+
+@resource_route.post("/remove_alias", response_model=ResourceResponse)
+def resource_remove_alias(
+    request: AliasRequest,
+    session: SessionDep
+) -> ResourceResponse:
+    """
+    Removes alias from resource
+    """
+    return remove_resource_alias(alias_request=request, db_session=session)

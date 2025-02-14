@@ -8,3 +8,7 @@ class ResourceResponse(BaseModel):
     description: str | None = None
     providing_nodes: list[Node] = []
     aliases: list[ResourceAlias]
+
+class AliasRequest(BaseModel):
+    resource_id: int
+    alias_id: int

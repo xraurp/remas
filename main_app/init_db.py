@@ -81,6 +81,10 @@ def insert_test_data(engine: Engine) -> None:
             name="TestResource2",
             description="Test resource 2"
         ))
+        session.add(Resource(
+            name="TestResource3",
+            description="Test resource 3"
+        ))
         session.add(NodeProvidesResource(
             node_id=1,
             resource_id=1,
@@ -90,6 +94,39 @@ def insert_test_data(engine: Engine) -> None:
             node_id=1,
             resource_id=2,
             amount=1
+        ))
+        session.add(ResourceAlias(
+            name="TestAlias1",
+            description="Test alias 1"
+        ))
+        session.add(ResourceAlias(
+            name="TestAlias2",
+            description="Test alias 2"
+        ))
+        session.commit()
+        session.add(ResourceHasAlias(
+            resource_id=1,
+            alias_id=1
+        ))
+        session.add(ResourceHasAlias(
+            resource_id=1,
+            alias_id=2
+        ))
+        session.add(ResourceHasAlias(
+            resource_id=2,
+            alias_id=1
+        ))
+        session.add(ResourceHasAlias(
+            resource_id=2,
+            alias_id=2
+        ))
+        session.add(ResourceHasAlias(
+            resource_id=3,
+            alias_id=1
+        ))
+        session.add(ResourceHasAlias(
+            resource_id=3,
+            alias_id=2
         ))
         session.commit()
         session.close()

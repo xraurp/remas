@@ -7,7 +7,8 @@ from src.routes import (
     user_route,
     group_route,
     node_route,
-    resource_route
+    resource_route,
+    resource_alias_route
 )
 
 @asynccontextmanager
@@ -33,3 +34,4 @@ app.include_router(user_route)
 app.include_router(group_route)
 app.include_router(node_route)
 app.include_router(resource_route)
+app.include_router(resource_alias_route)

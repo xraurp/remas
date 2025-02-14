@@ -1,5 +1,6 @@
-from src.db.models  import Resource
+from src.db.models  import Resource, ResourceAlias
 from sqlmodel import select, Session
+from src.schemas.resource_entities import AliasRequest
 
 def create_resource(
     resource: Resource,
@@ -20,6 +21,9 @@ def delete_resource(resource_id: int, db_session: Session) -> None:
     resource = db_session.get(Resource, resource_id)
     if not resource:
         raise ValueError(f"Resource with id {resource_id} not found!")
+    for alias in resource.aliases:
+        if len(alias.resources) == 1:
+            db_session.delete(alias)
     db_session.delete(resource)
     db_session.commit()
 
@@ -47,3 +51,47 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
     db_session.commit()
     db_session.refresh(db_resource)
     return db_resource
+
+def add_resource_alias(
+    alias_request: AliasRequest,
+    db_session: Session
+) -> Resource:
+    """
+    Adds alias to resource
+    """
+    resource = db_session.get(Resource, alias_request.resource_id)
+    if not resource:
+        raise ValueError(
+            f"Resource with id {alias_request.resource_id} not found!"
+        )
+    alias = db_session.get(ResourceAlias, alias_request.alias_id)
+    if not alias:
+        raise ValueError(f"Alias with id {alias_request.alias_id} not found!")
+    resource.aliases.append(alias)
+    db_session.commit()
+    db_session.refresh(resource)
+    return resource
+
+def remove_resource_alias(
+    alias_request: AliasRequest,
+    db_session: Session
+) -> Resource:
+    """
+    Removes alias from resource
+    """
+    resource = db_session.get(Resource, alias_request.resource_id)
+    if not resource:
+        raise ValueError(
+            f"Resource with id {alias_request.resource_id} not found!"
+        )
+    alias = db_session.get(ResourceAlias, alias_request.alias_id)
+    if not alias:
+        raise ValueError(f"Alias with id {alias_request.alias_id} not found!")
+    alias.resources.remove(resource)
+    db_session.commit()
+    db_session.refresh(alias)
+    if not len(alias.resources):
+        db_session.delete(alias)
+        db_session.commit()
+    db_session.refresh(resource)
+    return resource
