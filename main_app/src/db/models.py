@@ -1,15 +1,11 @@
-from typing import Literal, Optional
+from typing import Optional
 from sqlmodel import (
     Field,
     SQLModel,
-    Relationship,
-    create_engine
+    Relationship
 )
 import enum
-from datetime import (
-    datetime,
-    timedelta
-)
+from datetime import datetime
 
 
 class User(SQLModel, table=True):
@@ -32,6 +28,11 @@ class User(SQLModel, table=True):
         back_populates="owner"
     )
 
+    # Received notifications
+    notifications: list["UserHasNotification"] = Relationship(
+        back_populates="user"
+    )
+
 class Group(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
@@ -40,11 +41,18 @@ class Group(SQLModel, table=True):
 
     # Self reference - parent / child relationship
     parent_id: int | None = Field(default=None, foreign_key='group.id')
-    parent: Optional["Group"] = Relationship(back_populates='children')
+    parent: Optional["Group"] = Relationship(
+        back_populates='children',
+        sa_relationship_kwargs={'remote_side': 'Group.id'}
+    )
     children: list["Group"] = Relationship(back_populates='parent')
 
     members: list[User] = Relationship(back_populates="group")
     limits: list["Limit"] = Relationship(back_populates="group")
+
+    notifications: list["GroupHasNotification"] = Relationship(
+        back_populates="group"
+    )
 
 class Node(SQLModel, table=True):
     """
@@ -163,7 +171,7 @@ class Task(SQLModel, table=True):
     resource_allocations: list[ResourceAllocation] = Relationship(
         back_populates="task"
     )
-    tags: list["TaskTag"] = Relationship(back_populates="tasks")
+    tags: list["TaskHasTag"] = Relationship(back_populates="task")
     events: list["Event"] = Relationship(back_populates="task")
 
 class TaskTag(SQLModel, table=True):
@@ -226,6 +234,43 @@ class Notification(SQLModel, table=True):
         back_populates="notification"
     )
 
+    receivers_users: list["UserHasNotification"] = Relationship(
+        back_populates="notification"
+    )
+    receivers_groups: list["GroupHasNotification"] = Relationship(
+        back_populates="notification"
+    )
+
+class UserHasNotification(SQLModel, table=True):
+    user_id: int = Field(
+        default=None,
+        foreign_key="user.id",
+        primary_key=True
+    )
+    notification_id: int = Field(
+        default=None,
+        foreign_key="notification.id",
+        primary_key=True
+    )
+
+    user: User = Relationship(back_populates="notifications")
+    notification: Notification = Relationship(back_populates="receivers_users")
+
+class GroupHasNotification(SQLModel, table=True):
+    group_id: int = Field(
+        default=None,
+        foreign_key="group.id",
+        primary_key=True
+    )
+    notification_id: int = Field(
+        default=None,
+        foreign_key="notification.id",
+        primary_key=True
+    )
+
+    group: Group = Relationship(back_populates="notifications")
+    notification: Notification = Relationship(back_populates="receivers_groups")
+
 class EventHasNotificaton(SQLModel, table=True):
     """
     Connection table between event and notification.
@@ -279,13 +324,3 @@ class NodeIsLimitedBy(SQLModel, table=True):
 
     limit: Limit = Relationship(back_populates="nodes")
     node: Node = Relationship(back_populates="limits")
-
-
-def init_db() -> None:
-    from src.config import Settings
-
-    engine = create_engine(url=Settings().database_url, echo=True)
-    SQLModel.metadata.create_all(engine)
-
-if __name__ == '__main__':
-    init_db()
