@@ -1,7 +1,4 @@
-from fastapi import (
-    Depends,
-    APIRouter
-)
+from fastapi import APIRouter
 from src.app_logic.group_operations import (
     get_all_groups,
     get_group,
@@ -13,16 +10,11 @@ from src.app_logic.group_operations import (
 )
 from src.db.models import Group
 from src.schemas.group_entities import GroupResponse
-from src.db.connection import get_db_session
-from typing import Annotated
-from sqlmodel import Session
+from . import SessionDep
 
 group_route = APIRouter(
     prefix="/group"
 )
-
-SessionDep = Annotated[Session, Depends(get_db_session)]
-
 
 @group_route.get("/", response_model=list[GroupResponse])
 def get_groups(session: SessionDep) -> list[GroupResponse]:

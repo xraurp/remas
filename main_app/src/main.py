@@ -3,7 +3,12 @@ from fastapi import FastAPI
 from src.config import Settings
 from contextlib import asynccontextmanager
 from src.db.connection import init_db_engine
-from src.routes import user_route, group_route
+from src.routes import (
+    user_route,
+    group_route,
+    node_route,
+    resource_route
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,3 +31,5 @@ async def root():
 
 app.include_router(user_route)
 app.include_router(group_route)
+app.include_router(node_route)
+app.include_router(resource_route)

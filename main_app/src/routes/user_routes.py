@@ -1,5 +1,4 @@
 from fastapi import (
-    Depends,
     HTTPException,
     APIRouter
 )
@@ -15,15 +14,11 @@ from src.schemas.user_entities import (
     UpdateUserRequest,
     UserNoPassword
 )
-from src.db.connection import get_db_session
-from typing import Annotated
-from sqlmodel import Session
+from . import SessionDep
 
 user_route = APIRouter(
     prefix="/user"
 )
-
-SessionDep = Annotated[Session, Depends(get_db_session)]
 
 @user_route.get("/", response_model=list[UserNoPassword])
 def get_users(session: SessionDep) -> list[UserNoPassword]:
