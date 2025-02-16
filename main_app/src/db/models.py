@@ -48,12 +48,22 @@ class User(SQLModel, table=True):
     group_id: int = Field(default=2, foreign_key="group.id")
     group: "Group" = Relationship(back_populates="members")
 
-    limits: list["Limit"] = Relationship(back_populates="user")
-    tasks: list["Task"] = Relationship(back_populates="owner")
-    tags: list["TaskTag"] = Relationship(back_populates="user")
+    limits: list["Limit"] = Relationship(
+        back_populates="user",
+        cascade_delete=True
+    )
+    tasks: list["Task"] = Relationship(
+        back_populates="owner",
+        cascade_delete=True
+    )
+    tags: list["TaskTag"] = Relationship(
+        back_populates="user",
+        cascade_delete=True
+    )
     # Notifications created by this user
     created_notifications: list["Notification"] = Relationship(
-        back_populates="owner"
+        back_populates="owner",
+        cascade_delete=True
     )
 
     # Received notifications
@@ -237,6 +247,11 @@ class TaskHasTag(SQLModel, table=True):
         ondelete="CASCADE"
     )
 
+class TaskStatus(enum.Enum):
+    scheduled = "scheduled"
+    running = "running"
+    finished = "finished"
+
 class Task(SQLModel, table=True):
     """
     Task is a job that user executes on a node.
@@ -244,6 +259,10 @@ class Task(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str | None = None
+    start_time: datetime = Field(index=True)
+    end_time: datetime = Field(index=True)
+
+    status: TaskStatus = Field(default=TaskStatus.scheduled, index=True)
 
     owner_id: int = Field(
         default=None,
@@ -253,13 +272,17 @@ class Task(SQLModel, table=True):
     owner: User = Relationship(back_populates="tasks")
 
     resource_allocations: list[ResourceAllocation] = Relationship(
-        back_populates="task"
+        back_populates="task",
+        cascade_delete=True
     )
     tags: list["TaskTag"] = Relationship(
         back_populates="tasks",
         link_model=TaskHasTag
     )
-    events: list["Event"] = Relationship(back_populates="task")
+    events: list["Event"] = Relationship(
+        back_populates="task",
+        cascade_delete=True
+    )
 
 class TaskTag(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
@@ -332,7 +355,7 @@ class Notification(SQLModel, table=True):
     owner_id: int | None = Field(
         default=None,
         foreign_key="user.id",
-        ondelete="SET NULL"
+        ondelete="CASCADE"
     )
     owner: User | None = Relationship(back_populates="created_notifications")
 

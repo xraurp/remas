@@ -14,6 +14,7 @@ from src.db.models import (
     ResourceHasAlias,
     NodeProvidesResource,
     ResourceAllocation,
+    TaskStatus,
     Task,
     TaskTag,
     TaskHasTag,
@@ -93,7 +94,17 @@ def insert_test_data(engine: Engine) -> None:
         session.add(NodeProvidesResource(
             node_id=1,
             resource_id=2,
-            amount=1
+            amount=4
+        ))
+        session.add(NodeProvidesResource(
+            node_id=2,
+            resource_id=1,
+            amount=2
+        ))
+        session.add(NodeProvidesResource(
+            node_id=2,
+            resource_id=2,
+            amount=2
         ))
         session.add(ResourceAlias(
             name="TestAlias1",
@@ -127,6 +138,80 @@ def insert_test_data(engine: Engine) -> None:
         session.add(ResourceHasAlias(
             resource_id=3,
             alias_id=2
+        ))
+        session.commit()
+        session.add(Task(
+            name="TestTask1",
+            description="Test task 1",
+            start_time="2025-02-16 10:00:00",
+            end_time="2025-02-16 14:00:00",
+            status=TaskStatus.scheduled,
+            owner_id=1,
+            resource_allocations=[
+                ResourceAllocation(
+                    node_id=2,
+                    resource_id=1,
+                    amount=1
+                ),
+                ResourceAllocation(
+                    node_id=2,
+                    resource_id=2,
+                    amount=1
+                ),
+                ResourceAllocation(
+                    node_id=1,
+                    resource_id=2,
+                    amount=1
+                )
+            ],
+            events=[
+                Event(
+                    name=f"TestTask1 start",
+                    description="Start test task 1",
+                    time="2025-02-16 10:00:00",
+                    type=EventType.task_start
+                ),
+                Event(
+                    name=f"TestTask1 end",
+                    description="End test task 1",
+                    time="2025-02-16 14:00:00",
+                    type=EventType.task_end
+                )
+            ]
+        ))
+        session.add(Task(
+            name="TestTask2",
+            description="Test task 2",
+            start_time="2025-02-16 11:00:00",
+            end_time="2025-02-16 15:00:00",
+            status=TaskStatus.scheduled,
+            owner_id=1,
+            resource_allocations=[
+                ResourceAllocation(
+                    node_id=2,
+                    resource_id=1,
+                    amount=1
+                ),
+                ResourceAllocation(
+                    node_id=2,
+                    resource_id=2,
+                    amount=1
+                )
+            ],
+            events=[
+                Event(
+                    name=f"TestTask2 start",
+                    description="Start test task 2",
+                    time="2025-02-16 11:00:00",
+                    type=EventType.task_start
+                ),
+                Event(
+                    name=f"TestTask2 end",
+                    description="End test task 2",
+                    time="2025-02-16 15:00:00",
+                    type=EventType.task_end
+                )
+            ]
         ))
         session.commit()
         session.close()

@@ -13,3 +13,4 @@ from .group_routes import group_route
 from .node_routes import node_route
 from .resource_routes import resource_route
 from .resource_alias_routes import resource_alias_route
+from .task_routes import task_route
