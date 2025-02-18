@@ -17,6 +17,7 @@ from src.schemas.task_entities import (
 )
 from src.schemas.user_entities import UserNoPasswordSimple
 from fastapi import HTTPException
+from datetime import datetime
 
 def generate_task_response_full(task: Task) -> TaskResponseFull:
     return TaskResponseFull(
@@ -111,19 +112,181 @@ def check_resource_availability(
                 return False
     return True
 
+def taskrequest_to_task(
+    task: CreateTaskRequest,
+    owner_id: int,
+    db_session: Session
+) -> Task:
+    """
+    Generates task from task request.
+    :param task (CreateTaskRequest): task request with task data
+    :param owner_id (int): id of the task owner
+    :param db_session (Session): database session to use
+    :return (Task): New task that can be added to database
+    """
+    task_to_schedule = Task(
+        id=task.id,
+        name=task.name,
+        description=task.description,
+        start_time=task.start_time,
+        end_time=task.end_time,
+        status=TaskStatus.scheduled,
+        owner_id=owner_id,
+        resource_allocations=[
+            ResourceAllocation(
+                node_id=task_ra.node_id,
+                resource_id=task_ra.resource_id,
+                amount=task_ra.amount
+            )
+            for task_ra in task.resource_allocations
+        ],
+        events = [
+            Event(
+                name=f"{task.name} start",
+                description=f"Start of {task.name}",
+                time=task.start_time,
+                type=EventType.task_start,
+            ),
+            Event(
+                name=f"{task.name} end",
+                description=f"End of {task.name}",
+                time=task.end_time,
+                type=EventType.task_end,
+            )
+        ]
+    )
+    # TODO - add notifications according to user configuration
+    db_session.add(task_to_schedule)
+    return task_to_schedule
+
+def check_resource_changes(
+    task_request: CreateTaskRequest,
+    existing_task: Task
+) -> bool:
+    """
+    Checks if resource allocation has changed in the request.
+    :param task_request (CreateTaskRequest): task request
+    :param existing_task (Task): existing task in database
+    :return (bool): True if allocation has changed, else False
+    """
+    new_resources = [
+        ResourceAllocation(
+            task_id = task_request.id,
+            node_id = task_ra.node_id,
+            resource_id = task_ra.resource_id,
+            amount = task_ra.amount
+        )
+        for task_ra in task_request.resource_allocations
+    ]
+    for ra in new_resources:
+        if ra not in existing_task.resource_allocations:
+            return True
+    for ra in existing_task.resource_allocations:
+        if ra not in new_resources:
+            return True
+    return False
+
+def update_task_info_from_request(
+    task_request: CreateTaskRequest,
+    existing_task: Task
+) -> None:
+    """
+    Updates tasks information from task request.
+    :param task_request (CreateTaskRequest): task request
+    :param existing_task (Task): existing task in database
+    """
+    existing_task.name = task_request.name
+    existing_task.description = task_request.description
+
+def update_task_scheduling_from_request(
+    task_request: CreateTaskRequest,
+    existing_task: Task
+) -> None:
+    """
+    Updates start and end time of task from task request.
+    :param task_request (CreateTaskRequest): task request
+    :param existing_task (Task): existing task in database
+    """
+    if existing_task.status == TaskStatus.finished:
+        raise HTTPException(
+            status_code=409,
+            detail="Task scheduling time cannot be updated after"
+                   " task has finished!"
+        )
+    if existing_task.status == TaskStatus.running \
+    and existing_task.start_time != task_request.start_time:
+        raise HTTPException(
+            status_code=409,
+            detail="Task start time cannot be changed if task"
+                    " has already started!"
+        )
+    
+    existing_task.start_time = task_request.start_time
+    existing_task.end_time = task_request.end_time
+    now = datetime.now()
+    for e in existing_task.events:
+        if e.type == EventType.task_start:
+            e.time = task_request.start_time
+        if e.type == EventType.task_end:
+            e.time = task_request.end_time
+    
+    # TODO - change scheduling of the notifications connected to start/end of
+    #        the task
+
+def update_task_resources_from_request(
+    task_request: CreateTaskRequest,
+    existing_task: Task
+) -> None:
+    """
+    Updates resources of existing task from task request.
+    :param task_request (CreateTaskRequest): task request
+    :param existing_task (Task): existing task in database
+    """
+    new_resources = [
+        ResourceAllocation(
+            task_id = task_request.id,
+            node_id = task_ra.node_id,
+            resource_id = task_ra.resource_id,
+            amount = task_ra.amount
+        )
+        for task_ra in task_request.resource_allocations
+    ]
+    existing_task.resource_allocations = new_resources
+
+def update_task_from_request(
+    task_request: CreateTaskRequest,
+    existing_task: Task
+) -> None:
+    """
+    Updates task data from task request.
+    :param task_request (CreateTaskRequest): task request
+    :param existing_task (Task): existing task in database
+    """
+    update_task_info_from_request(
+        task_request=task_request,
+        existing_task=existing_task
+    )
+    update_task_resources_from_request(
+        task_request=task_request,
+        existing_task=existing_task
+    )
+    update_task_scheduling_from_request(
+        task_request=task_request,
+        existing_task=existing_task
+    )
+
 def schedule_task(
     task: CreateTaskRequest,
     owner_id: int,
     db_session: Session
 ) -> TaskResponseFull:
     """
-    Adds task
+    Adds task or updates existing one.
     :param task (CreateTaskRequest): task to schedule
     :param owner_id (int): id of task owner
     :param db_session (Session): database session
     :return (TaskResponse): scheduled task
     """
-    # TODO - add functionality toupdate task
     if not task.resource_allocations:
         raise HTTPException(
             status_code=400,
@@ -135,6 +298,39 @@ def schedule_task(
             detail="Task start time must be before its end time!"
         )
     
+    # Check if existing task is being updated
+    if task.id:
+        existing_task = db_session.get(Task, task.id)
+        if not existing_task:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Task with id {task.id} not found!"
+            )
+        if existing_task.owner_id != owner_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Task is not owned by current user!"
+            )
+        
+        # Update task info if rescheduling is not needed
+        if existing_task.start_time == task.start_time \
+        and existing_task.end_time == task.end_time \
+        and not check_resource_changes(
+            task_request=task,
+            existing_task=existing_task
+        ):
+            update_task_info_from_request(
+                task_request=task,
+                existing_task=existing_task
+            )
+            db_session.commit()
+            db_session.refresh(existing_task)
+            return existing_task
+    else:
+        existing_task = None
+
+    print('idk')
+
     # Create structure of required nodes and resources
     # {
     #     node_id: {
@@ -152,6 +348,8 @@ def schedule_task(
             task_ra.amount
         node_resources[task_ra.node_id][task_ra.resource_id] = None
     
+    # TODO - Check if resource allocation does not exeeds limits
+
     # Get all nodes that are required for the task
     nodes = db_session.scalars(
         select(Node).where(
@@ -168,18 +366,18 @@ def schedule_task(
                 node_resources[node.id][resource.resource_id] = resource.amount
     
     # TODO - lock the task table while scheduling
-    # Find overlapping tasks
+    # Find overlapping tasks (excluding current task)
     overlapping_tasks = db_session.scalars(
         select(Task).where(
             Task.status.in_([TaskStatus.scheduled, TaskStatus.running]),
             Task.start_time <= task.end_time,
             Task.end_time >= task.start_time
+        ).where(
+            Task.id != existing_task.id if existing_task else None
         ).order_by(Task.start_time)
     ).all()
     overlap_ends = [o for o in overlapping_tasks]
     overlap_ends.sort(key=lambda o: o.end_time)
-    print(overlapping_tasks)
-    print(overlap_ends)
 
     # Check if there are enough resources for the task
     for t in overlapping_tasks:
@@ -223,41 +421,21 @@ def schedule_task(
         )
     
     # Schedule task
-    task_to_schedule = Task(
-        name=task.name,
-        description=task.description,
-        start_time=task.start_time,
-        end_time=task.end_time,
-        status=TaskStatus.scheduled,
-        owner_id=owner_id,
-        resource_allocations=[
-            ResourceAllocation(
-                node_id=task_ra.node_id,
-                resource_id=task_ra.resource_id,
-                amount=task_ra.amount
-            )
-            for task_ra in task.resource_allocations
-        ],
-        events = [
-            Event(
-                name=f"{task.name} start",
-                description=f"Start of {task.name}",
-                time=task.start_time,
-                type=EventType.task_start,
-            ),
-            Event(
-                name=f"{task.name} end",
-                description=f"End of {task.name}",
-                time=task.end_time,
-                type=EventType.task_end,
-            )
-        ]
-    )
-    db_session.add(task_to_schedule)
+    if existing_task:
+        update_task_from_request(
+            task_request=task,
+            existing_task=existing_task
+        )
+    else:
+        existing_task = taskrequest_to_task(
+            task=task,
+            owner_id=owner_id,
+            db_session=db_session
+        )
     db_session.commit()
     # TODO - unlock the task table after scheduling
-    # TODO - add notifications according to user configuration
-    return generate_task_response_full(task=task_to_schedule)
+    db_session.refresh(existing_task)
+    return generate_task_response_full(task=existing_task)
 
 def remove_task(task_id: int, db_session: Session) -> None:
     """
