@@ -3,9 +3,11 @@ from src.app_logic.task_operations import (
     get_all_tasks,
     get_task,
     schedule_task,
-    remove_task
+    remove_task,
+    add_tag_to_task,
+    remove_tag_from_task
 )
-from src.db.models import Task
+from src.db.models import Task, TaskHasTag
 from src.schemas.task_entities import (
     TaskResponseSimple,
     TaskResponseFull,
@@ -17,6 +19,7 @@ task_route = APIRouter(
     prefix="/task"
 )
 
+# TODO - AUTH - add authentication and pass user id to operations
 
 @task_route.get("/", response_model=list[TaskResponseSimple])
 def get_tasks(session: SessionDep) -> list[TaskResponseSimple]:
@@ -33,7 +36,10 @@ def task_get(task_id: int, session: SessionDep) -> TaskResponseFull:
     return get_task(task_id=task_id, db_session=session)
 
 @task_route.post("/", response_model=TaskResponseFull)
-def task_create(task: CreateTaskRequest, session: SessionDep) -> TaskResponseFull:
+def task_create(
+    task: CreateTaskRequest,
+    session: SessionDep
+) -> TaskResponseFull:
     """
     Creates new task or updates existing one.
     """
@@ -50,3 +56,33 @@ def task_delete(task_id: int, session: SessionDep) -> None:
         return {'detail': 'Task deleted'}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@task_route.post("/add_tag", response_model=TaskResponseFull)
+def task_add_tag(
+    task_tag_request: TaskHasTag,
+    session: SessionDep
+) -> TaskResponseFull:
+    """
+    Adds tag to task
+    """
+    # TODO - AUTH - add user id
+    return add_tag_to_task(
+        task_tag_request=task_tag_request,
+        user_id=1,
+        db_session=session
+    )
+
+@task_route.post("/remove_tag", response_model=TaskResponseFull)
+def task_remove_tag(
+    task_tag_request: TaskHasTag,
+    session: SessionDep
+) -> TaskResponseFull:
+    """
+    Removes tag from task
+    """
+    # TODO - AUTH - add user id
+    return remove_tag_from_task(
+        task_tag_request=task_tag_request,
+        user_id=1,
+        db_session=session
+    )

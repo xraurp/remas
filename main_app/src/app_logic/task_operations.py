@@ -4,9 +4,12 @@ from src.db.models import (
     EventType,
     Event,
     Node,
-    TaskStatus
+    TaskStatus,
+    TaskTag,
+    TaskHasTag
 )
 from sqlmodel import select, Session
+from sqlalchemy.exc import IntegrityError
 from src.schemas.task_entities import (
     TaskResponseFull,
     TaskResourceAllocationResponse,
@@ -447,3 +450,85 @@ def remove_task(task_id: int, db_session: Session) -> None:
         )
     db_session.delete(task)
     db_session.commit()
+
+def add_tag_to_task(
+    task_tag_request: TaskHasTag,
+    user_id: int,
+    db_session: Session
+) -> Task:
+    """
+    Adds tag to task
+    """
+    tag = db_session.get(TaskTag, task_tag_request.tag_id)
+    if not tag:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tag with id {task_tag_request.tag_id} not found!"
+        )
+    if tag.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Can't add tag owned by another user!"
+        )
+    task = db_session.get(Task, task_tag_request.task_id)
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task with id {task_tag_request.task_id} not found!"
+        )
+    if task.owner_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Can't add tag to task owned by another user!"
+        )
+    if tag not in task.tags:
+        task.tags.append(tag)
+        db_session.commit()
+        db_session.refresh(task)
+        return generate_task_response_full(task=task)
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail="Tag is already assigned to the task!"
+        )
+
+def remove_tag_from_task(
+    task_tag_request: TaskHasTag,
+    user_id: int,
+    db_session: Session
+) -> Task:
+    """
+    Removes tag from task
+    """
+    tag = db_session.get(TaskTag, task_tag_request.tag_id)
+    if not tag:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tag with id {task_tag_request.tag_id} not found!"
+        )
+    if tag.user_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Can't remove tag owned by another user!"
+        )
+    task = db_session.get(Task, task_tag_request.task_id)
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task with id {task_tag_request.task_id} not found!"
+        )
+    if task.owner_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Can't remove tag from task owned by another user!"
+        )
+    if tag in task.tags:
+        task.tags.remove(tag)
+        db_session.commit()
+        db_session.refresh(task)
+        return generate_task_response_full(task=task)
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail="Tag is not assigned to the task!"
+        )
