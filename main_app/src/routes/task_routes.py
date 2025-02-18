@@ -35,9 +35,9 @@ def task_get(task_id: int, session: SessionDep) -> TaskResponseFull:
 @task_route.post("/", response_model=TaskResponseFull)
 def task_create(task: CreateTaskRequest, session: SessionDep) -> TaskResponseFull:
     """
-    Creates new task.
+    Creates new task or updates existing one.
     """
-    # TODO - TEST - change owner ID to current user!
+    # TODO - AUTH - change owner ID to current user!
     return schedule_task(task=task, owner_id=1, db_session=session)
 
 @task_route.delete("/{task_id}", status_code=200, response_model=dict)

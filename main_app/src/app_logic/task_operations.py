@@ -298,6 +298,7 @@ def schedule_task(
             detail="Task start time must be before its end time!"
         )
     
+    # TODO - lock the task table while scheduling
     # Check if existing task is being updated
     if task.id:
         existing_task = db_session.get(Task, task.id)
@@ -363,7 +364,6 @@ def schedule_task(
             if resource.resource_id in required_nodes_resources[node.id]:
                 node_resources[node.id][resource.resource_id] = resource.amount
     
-    # TODO - lock the task table while scheduling
     # Find overlapping tasks (excluding current task)
     overlapping_tasks = db_session.scalars(
         select(Task).where(
