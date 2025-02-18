@@ -329,8 +329,6 @@ def schedule_task(
     else:
         existing_task = None
 
-    print('idk')
-
     # Create structure of required nodes and resources
     # {
     #     node_id: {
