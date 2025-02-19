@@ -10,7 +10,8 @@ from src.routes import (
     resource_route,
     resource_alias_route,
     task_route,
-    task_tag_route
+    task_tag_route,
+    limit_route
 )
 
 @asynccontextmanager
@@ -39,3 +40,4 @@ app.include_router(resource_route)
 app.include_router(resource_alias_route)
 app.include_router(task_route)
 app.include_router(task_tag_route)
+app.include_router(limit_route)

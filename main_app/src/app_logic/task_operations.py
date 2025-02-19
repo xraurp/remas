@@ -6,7 +6,8 @@ from src.db.models import (
     Node,
     TaskStatus,
     TaskTag,
-    TaskHasTag
+    TaskHasTag,
+    Limit
 )
 from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
@@ -19,6 +20,7 @@ from src.schemas.task_entities import (
     ResourceAllocationRequest,
 )
 from src.schemas.user_entities import UserNoPasswordSimple
+from src.app_logic.limit_operations import get_all_user_limits
 from fastapi import HTTPException
 from datetime import datetime
 
@@ -236,6 +238,29 @@ def update_task_scheduling_from_request(
     # TODO - change scheduling of the notifications connected to start/end of
     #        the task
 
+def check_user_limit(
+    user_limits: dict[int, dict[int, Limit]],
+    required_nodes_resources: dict[int, dict[int, int]]
+) -> None:
+    """
+    Check if user is not restricted from using required resources.
+    :param user_limits (dict[int, dict[int, Limit]]): user limits by resource
+    :param required_nodes_resources (dict[int, dict[int, int]]): required
+        resources
+    :raises HTTPException: if user is restricted
+    """
+    for node_id, resources in required_nodes_resources.items():
+        for resource_id, amount in resources.items():
+            if user_limits[resource_id][node_id].amount < amount:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Task resource allocation exeeds user limits!"
+                           " Exceeded resource: "
+                           f"{user_limits[resource_id][node_id].name}, Limit: "
+                           f"{user_limits[resource_id][node_id].amount}"
+                )
+
+
 def update_task_resources_from_request(
     task_request: CreateTaskRequest,
     existing_task: Task
@@ -350,7 +375,12 @@ def schedule_task(
             task_ra.amount
         node_resources[task_ra.node_id][task_ra.resource_id] = None
     
-    # TODO - Check if resource allocation does not exeeds limits
+    # Check if resource allocation does not exeeds limits
+    user_limits = get_all_user_limits(user_id=owner_id, session=db_session)
+    check_user_limit(
+        user_limits=user_limits,
+        required_nodes_resources=required_nodes_resources
+    )
 
     # Get all nodes that are required for the task
     nodes = db_session.scalars(
@@ -374,7 +404,7 @@ def schedule_task(
             Task.start_time <= task.end_time,
             Task.end_time >= task.start_time
         ).where(
-            Task.id != existing_task.id if existing_task else None
+            Task.id != (existing_task.id if existing_task else None)
         ).order_by(Task.start_time)
     ).all()
     overlap_ends = [o for o in overlapping_tasks]
@@ -433,7 +463,13 @@ def schedule_task(
             owner_id=owner_id,
             db_session=db_session
         )
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail="Task with the same name already exists!"
+        )
     # TODO - unlock the task table after scheduling
     db_session.refresh(existing_task)
     return generate_task_response_full(task=existing_task)
