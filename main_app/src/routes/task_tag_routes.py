@@ -52,8 +52,5 @@ def task_tag_delete(task_tag_id: int, session: SessionDep) -> dict:
     Deletes task tag.
     """
     # TODO - AUTH - add user id
-    try:
-        delete_tag(tag_id=task_tag_id, user_id=1, db_session=session)
-        return {'detail': 'Task tag deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_tag(tag_id=task_tag_id, user_id=1, db_session=session)
+    return {'detail': 'Task tag deleted'}

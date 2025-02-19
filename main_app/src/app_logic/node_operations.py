@@ -5,6 +5,7 @@ from src.schemas.node_entities import (
     NodeResponse,
     NodeResourceResponse
 )
+from fastapi import HTTPException
 
 # TODO - query resources when receiving node
 
@@ -35,6 +36,7 @@ def create_node(
     """
     Creates new node
     """
+    node.id = None
     db_session.add(node)
     db_session.commit()
     db_session.refresh(node)
@@ -46,7 +48,10 @@ def delete_node(node_id: int, db_session: Session) -> None:
     """
     node = db_session.get(Node, node_id)
     if not node:
-        raise ValueError(f"Node with id {node_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node with id {node_id} not found!"
+        )
     db_session.delete(node)
     db_session.commit()
 
@@ -71,7 +76,10 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
     """
     db_node = db_session.get(Node, node.id)
     if not db_node:
-        raise ValueError(f"Node with id {node.id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node with id {node.id} not found!"
+        )
     db_node.name = node.name
     db_node.description = node.description
     db_session.commit()
@@ -87,10 +95,16 @@ def add_resource_to_node(
     """
     node = db_session.get(Node, request.node_id)
     if not node:
-        raise ValueError(f"Node with id {request.node_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node with id {request.node_id} not found!"
+        )
     resource = db_session.get(Resource, request.resource_id)
     if not resource:
-        raise ValueError(f"Resource with id {request.resource_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {request.resource_id} not found!"
+        )
     node.resources.append(NodeProvidesResource(
         node_id=request.node_id,
         resource_id=request.resource_id,
@@ -109,10 +123,16 @@ def remove_resource_from_node(
     """
     node = db_session.get(Node, request.node_id)
     if not node:
-        raise ValueError(f"Node with id {request.node_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node with id {request.node_id} not found!"
+        )
     resource = db_session.get(Resource, request.resource_id)
     if not resource:
-        raise ValueError(f"Resource with id {request.resource_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {request.resource_id} not found!"
+        )
     node.resources.remove(NodeProvidesResource(
         node_id=request.node_id,
         resource_id=request.resource_id,

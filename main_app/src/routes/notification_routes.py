@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from src.app_logic.notification_operations import (
     get_all_notifications,
     get_notification,

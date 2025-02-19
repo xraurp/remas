@@ -81,7 +81,13 @@ def get_task(task_id: int, db_session: Session) -> TaskResponseFull:
     """
     Returns task by id
     """
-    return generate_task_response_full(task=db_session.get(Task, task_id))
+    task = db_session.get(Task, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task with id {task_id} not found!"
+        )
+    return generate_task_response_full(task=task)
 
 
 # TASK SCHEDULING
@@ -164,7 +170,6 @@ def taskrequest_to_task(
             )
         ]
     )
-    # TODO - add notifications according to user configuration
     db_session.add(task_to_schedule)
     return task_to_schedule
 

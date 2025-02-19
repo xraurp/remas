@@ -49,11 +49,8 @@ def node_delete(node_id: int, session: SessionDep):
     """
     Deletes node.
     """
-    try:
-        delete_node(node_id=node_id, db_session=session)
-        return {'detail': 'Node deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_node(node_id=node_id, db_session=session)
+    return {'detail': 'Node deleted'}
 
 @node_route.post("/add_resource", response_model=NodeResponse)
 def node_add_resource(
@@ -63,14 +60,10 @@ def node_add_resource(
     """
     Adds resource to node.
     """
-    try:
-        node = add_resource_to_node(
-            request=resource_request,
-            db_session=session
-        )
-        return node
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    return add_resource_to_node(
+        request=resource_request,
+        db_session=session
+    )
 
 @node_route.post("/remove_resource", response_model=NodeResponse)
 def node_remove_resource(
@@ -80,11 +73,7 @@ def node_remove_resource(
     """
     Removes resource from node.
     """
-    try:
-        node = remove_resource_from_node(
-            request=resource_request,
-            db_session=session
-        )
-        return node
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    return remove_resource_from_node(
+        request=resource_request,
+        db_session=session
+    )

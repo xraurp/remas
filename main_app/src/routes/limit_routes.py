@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from src.app_logic.limit_operations import (
     get_limit,
     get_limits_by_group,
@@ -61,8 +61,5 @@ def limit_delete(limit_id: int, session: SessionDep) -> None:
     """
     Deletes limit
     """
-    try:
-        remove_limit(limit_id=limit_id, session=session)
-        return {'detail': 'Limit deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    remove_limit(limit_id=limit_id, session=session)
+    return {'detail': 'Limit deleted'}

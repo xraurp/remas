@@ -49,11 +49,8 @@ def group_delete(group_id: int, session: SessionDep) -> dict:
     """
     Deletes group.
     """
-    try:
-        delete_group(group_id=group_id, db_session=session)
-        return {'detail': 'Group deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_group(group_id=group_id, db_session=session)
+    return {'detail': 'Group deleted'}
 
 @group_route.post("/{group_id}", response_model=GroupResponse)
 def group_add_users(
@@ -64,15 +61,11 @@ def group_add_users(
     """
     Adds users to group.
     """
-    try:
-        group = add_users_to_group(
-            group_id=group_id,
-            user_ids=user_ids,
-            db_session=session
-        )
-        return group
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    return add_users_to_group(
+        group_id=group_id,
+        user_ids=user_ids,
+        db_session=session
+    )
 
 @group_route.post("/{group_id}/parent/{parent_id}", response_model=GroupResponse)
 def group_change_parent(
@@ -83,12 +76,8 @@ def group_change_parent(
     """
     Changes group parent.
     """
-    try:
-        group = change_group_parent(
-            group_id=group_id,
-            parent_id=parent_id,
-            db_session=session
-        )
-        return group
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    return change_group_parent(
+        group_id=group_id,
+        parent_id=parent_id,
+        db_session=session
+    )

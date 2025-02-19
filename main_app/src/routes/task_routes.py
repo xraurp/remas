@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from src.app_logic.task_operations import (
     get_all_tasks,
     get_task,
@@ -51,11 +51,8 @@ def task_delete(task_id: int, session: SessionDep) -> None:
     """
     Deletes task.
     """
-    try:
-        remove_task(task_id=task_id, db_session=session)
-        return {'detail': 'Task deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    remove_task(task_id=task_id, db_session=session)
+    return {'detail': 'Task deleted'}
 
 @task_route.post("/add_tag", response_model=TaskResponseFull)
 def task_add_tag(

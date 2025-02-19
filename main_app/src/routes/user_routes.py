@@ -1,7 +1,4 @@
-from fastapi import (
-    HTTPException,
-    APIRouter
-)
+from fastapi import APIRouter
 from src.app_logic.user_operations import (
     get_all_users,
     get_user,
@@ -56,8 +53,5 @@ def user_delete(user_id: int, session: SessionDep):
     """
     Deletes user.
     """
-    try:
-        delete_user(user_id=user_id, db_session=session)
-        return {'detail': 'User deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_user(user_id=user_id, db_session=session)
+    return {'detail': 'User deleted'}

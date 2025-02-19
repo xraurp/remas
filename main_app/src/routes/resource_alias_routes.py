@@ -55,8 +55,5 @@ def resource_alias_delete(alias_id: int, session: SessionDep) -> None:
     """
     Deletes resource alias
     """
-    try:
-        delete_resource_alias(resource_alias_id=alias_id, db_session=session)
-        return {'detail': 'Resource alias deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_resource_alias(resource_alias_id=alias_id, db_session=session)
+    return {'detail': 'Resource alias deleted'}

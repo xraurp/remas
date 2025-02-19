@@ -1,6 +1,7 @@
 from src.db.models  import Resource, ResourceAlias
 from sqlmodel import select, Session
 from src.schemas.resource_entities import AliasRequest
+from fastapi import HTTPException
 
 def create_resource(
     resource: Resource,
@@ -9,6 +10,7 @@ def create_resource(
     """
     Creates new resource
     """
+    resource.id = None
     db_session.add(resource)
     db_session.commit()
     db_session.refresh(resource)
@@ -20,7 +22,10 @@ def delete_resource(resource_id: int, db_session: Session) -> None:
     """
     resource = db_session.get(Resource, resource_id)
     if not resource:
-        raise ValueError(f"Resource with id {resource_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {resource_id} not found!"
+        )
     for alias in resource.aliases:
         if len(alias.resources) == 1:
             db_session.delete(alias)
@@ -31,7 +36,13 @@ def get_resource(resource_id: int, db_session: Session) -> Resource:
     """
     Returns resource by id
     """
-    return db_session.get(Resource, resource_id)
+    resource = db_session.get(Resource, resource_id)
+    if not resource:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {resource_id} not found!"
+        )
+    return resource
 
 def get_all_resources(db_session: Session) -> list[Resource]:
     """
@@ -45,7 +56,10 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
     """
     db_resource = db_session.get(Resource, resource.id)
     if not db_resource:
-        raise ValueError(f"Resource with id {resource.id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {resource.id} not found!"
+        )
     db_resource.name = resource.name
     db_resource.description = resource.description
     db_session.commit()
@@ -61,12 +75,16 @@ def add_resource_alias(
     """
     resource = db_session.get(Resource, alias_request.resource_id)
     if not resource:
-        raise ValueError(
-            f"Resource with id {alias_request.resource_id} not found!"
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {alias_request.resource_id} not found!"
         )
     alias = db_session.get(ResourceAlias, alias_request.alias_id)
     if not alias:
-        raise ValueError(f"Alias with id {alias_request.alias_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Alias with id {alias_request.alias_id} not found!"
+        )
     resource.aliases.append(alias)
     db_session.commit()
     db_session.refresh(resource)
@@ -81,12 +99,16 @@ def remove_resource_alias(
     """
     resource = db_session.get(Resource, alias_request.resource_id)
     if not resource:
-        raise ValueError(
-            f"Resource with id {alias_request.resource_id} not found!"
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {alias_request.resource_id} not found!"
         )
     alias = db_session.get(ResourceAlias, alias_request.alias_id)
     if not alias:
-        raise ValueError(f"Alias with id {alias_request.alias_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Alias with id {alias_request.alias_id} not found!"
+        )
     alias.resources.remove(resource)
     db_session.commit()
     db_session.refresh(alias)

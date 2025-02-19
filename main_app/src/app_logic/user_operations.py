@@ -1,6 +1,7 @@
 from src.db.models import User
 from src.schemas.user_entities import UpdateUserRequest
 from sqlmodel import select, Session
+from fastapi import HTTPException
 
 # TODO - query notifications when receiving user
 
@@ -20,14 +21,19 @@ def get_user(user_id: int, db_session: Session) -> User:
     """
     Returns user by id.
     """
-    return db_session.get(User, user_id)
+    user = db_session.get(User, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {user_id} not found!"
+        )
+    return user
 
 def get_all_users(db_session: Session) -> list[User]:
     """
     Returns all users.
     """
-    result = db_session.scalars(select(User)).all()
-    return result
+    return db_session.scalars(select(User)).all()
 
 def update_user(user: UpdateUserRequest, db_session: Session) -> User:
     """
@@ -35,7 +41,10 @@ def update_user(user: UpdateUserRequest, db_session: Session) -> User:
     """
     db_user = db_session.get(User, user.id)
     if not db_user:
-        raise ValueError(f"User with id {user.id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {user.id} not found!"
+        )
     db_user.name = user.name
     db_user.surname = user.surname
     db_user.email = user.email
@@ -48,9 +57,15 @@ def delete_user(user_id: int, db_session: Session) -> None:
     Deletes user.
     """
     if user_id == 1:
-        raise ValueError("Cannot delete default user!")
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete default user!"
+        )
     db_user = db_session.get(User, user_id)
     if not db_user:
-        raise ValueError(f"User with id {user_id} not found!")
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {user_id} not found!"
+        )
     db_session.delete(db_user)
     db_session.commit()

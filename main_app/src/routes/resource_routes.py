@@ -50,11 +50,8 @@ def resource_delete(resource_id: int, session: SessionDep) -> dict:
     """
     Deletes resource.
     """
-    try:
-        delete_resource(resource_id=resource_id, db_session=session)
-        return {'detail': 'Resource deleted'}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    delete_resource(resource_id=resource_id, db_session=session)
+    return {'detail': 'Resource deleted'}
 
 @resource_route.post("/add_alias", response_model=ResourceResponse)
 def resource_add_alias(

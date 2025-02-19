@@ -22,7 +22,13 @@ def get_limit(limit_id: int, session: Session) -> Limit:
     """
     Returns limit by id
     """
-    return session.scalars(select(Limit).where(Limit.id == limit_id)).one()
+    try:
+        return session.scalars(select(Limit).where(Limit.id == limit_id)).one()
+    except NoResultFound:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Limit with id {limit_id} not found!"
+        )
 
 def add_limit(limit: LimitRequest, session: Session) -> Limit:
     """
