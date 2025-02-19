@@ -11,7 +11,8 @@ from src.routes import (
     resource_alias_route,
     task_route,
     task_tag_route,
-    limit_route
+    limit_route,
+    notification_route
 )
 
 @asynccontextmanager
@@ -41,3 +42,4 @@ app.include_router(resource_alias_route)
 app.include_router(task_route)
 app.include_router(task_tag_route)
 app.include_router(limit_route)
+app.include_router(notification_route)

@@ -16,3 +16,4 @@ from .resource_alias_routes import resource_alias_route
 from .task_routes import task_route
 from .task_tag_routes import task_tag_route
 from .limit_routes import limit_route
+from .notification_routes import notification_route

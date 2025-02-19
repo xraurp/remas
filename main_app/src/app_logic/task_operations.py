@@ -255,7 +255,11 @@ def check_user_limit(
     """
     for node_id, resources in required_nodes_resources.items():
         for resource_id, amount in resources.items():
-            if user_limits[resource_id][node_id].amount < amount:
+            try:  # check if resource is limited, if not, continue
+                limit_amount = user_limits[resource_id][node_id].amount
+            except KeyError:
+                continue
+            if limit_amount < amount:
                 raise HTTPException(
                     status_code=409,
                     detail="Task resource allocation exeeds user limits!"
@@ -322,12 +326,13 @@ def reschedule_task_notifications(
         user_id=owner_id,
         db_session=db_session
     )
-    for notification in notifications:
-        reschedule_notification(
-            notification=notification,
-            task=task,
-            db_session=db_session
-        )
+    for grop_notifications in notifications:
+        for notification in grop_notifications.notifications:
+            schedule_notification_events_for_task(
+                notification=notification,
+                task=task,
+                db_session=db_session
+            )
 
 def schedule_task(
     task: CreateTaskRequest,
@@ -506,7 +511,7 @@ def schedule_task(
     )
     db_session.commit()
     # TODO - unlock the task table after scheduling
-    
+
     db_session.refresh(existing_task)
     return generate_task_response_full(task=existing_task)
 

@@ -4,7 +4,9 @@ from src.db.models import (
     Group,
     NotificationType,
     Event,
-    EventType
+    EventType,
+    Task,
+    TaskStatus
 )
 from sqlmodel import select, Session
 from fastapi import HTTPException
@@ -100,7 +102,7 @@ def update_notification(
     if reschedule:
         reschedule_notification_events_for_all(
             notification=db_notification,
-            session=db_session
+            db_session=db_session
         )
         db_session.commit()
         db_session.refresh(db_notification)
@@ -128,7 +130,7 @@ def assign_or_unassign_notification(
     )
     db_notification = db_session.get(
         Notification,
-        assign_notification.notification_id
+        assignment_request.notification_id
     )
     if not db_notification:
         raise HTTPException(
@@ -160,6 +162,7 @@ def assign_or_unassign_notification(
     if unassign:
         if user and user in db_notification.receivers_users:
             db_notification.receivers_users.remove(user)
+            db_session.commit()
             remove_notification_scheduling_for_user(
                 notification=db_notification,
                 user=user,
@@ -167,6 +170,7 @@ def assign_or_unassign_notification(
             )
         if group and group in db_notification.receivers_groups:
             db_notification.receivers_groups.remove(group)
+            db_session.commit()
             remove_notification_scheduling_for_group(
                 notification=db_notification,
                 group=group,
@@ -175,6 +179,7 @@ def assign_or_unassign_notification(
     else:
         if user and user not in db_notification.receivers_users:
             db_notification.receivers_users.append(user)
+            db_session.commit()
             schedule_notification_events_for_user(
                 notification=db_notification,
                 user=user,
@@ -182,6 +187,7 @@ def assign_or_unassign_notification(
             )
         if group and group not in db_notification.receivers_groups:
             db_notification.receivers_groups.append(group)
+            db_session.commit()
             schedule_notitifation_events_for_group(
                 notification=db_notification,
                 group=group,
@@ -199,15 +205,15 @@ def schedule_notification_events_for_task(
 ) -> None:
     """
     Schedules notification events for task.
-    Does not commit changes in database!
+    Commit changes in database.
     """
     # check if notification needs to be scheduled
     if notification.type \
     not in (NotificationType.task_start, NotificationType.task_end):
         return
 
-    scheduled_event = None
     # check if notification is scheduled already
+    scheduled_event = None
     for event in task.events:
         if event.notification == notification:
             scheduled_event = event
@@ -220,32 +226,30 @@ def schedule_notification_events_for_task(
         if task.status != TaskStatus.scheduled:
             return
         start = task.start_time + timedelta(seconds=notification.time_offset)
-        event_type = EventType.task_start
     else:
         # do not schedule notification for end time
         # if task is has already finished
         if task.status == TaskStatus.finished:
             return
         start = task.end_time + timedelta(seconds=notification.time_offset)
-        event_type = EventType.task_end
     
     # schedule the notification
     if scheduled_event:
         # reschedule existing
         if scheduled_event.time != start:
             scheduled_event.time = start
-            scheduled_event.type = event_type
     else:
         # schedule new
         scheduled_event = Event(
             id = None,
             name = f"Task: {task.name}, notification: {notification.name}",
             time = start,
-            type = event_type,
-            taks_id = task.id,
+            type = EventType.other,
+            task_id = task.id,
             notification_id = notification.id
         )
         db_session.add(scheduled_event)
+    db_session.commit()
 
 def schedule_notification_events_for_user(
     notification: Notification,
@@ -254,11 +258,10 @@ def schedule_notification_events_for_user(
 ) -> Notification:
     """
     Schedule notification events for user.
-    Does not commit changes in database!
     """
     # check if notification needs to be scheduled
     if notification.type \
-    not in (NotificationType.user_start, NotificationType.user_end):
+    not in (NotificationType.task_start, NotificationType.task_end):
         return
 
     for task in user.tasks:
@@ -268,18 +271,17 @@ def schedule_notification_events_for_user(
             db_session=db_session
         )
 
-def schedule_notitifation_events_for_group(
+def schedule_notification_events_for_group(
     notification: Notification,
     group: Group,
     db_session: Session
 ) -> None:
     """
     Schedule notification events for group.
-    Does not commit changes in database!
     """
     # check if notification needs to be scheduled
     if notification.type \
-    not in (NotificationType.user_start, NotificationType.user_end):
+    not in (NotificationType.task_start, NotificationType.task_end):
         return
     
     for user in group.members:
@@ -290,7 +292,7 @@ def schedule_notitifation_events_for_group(
         )
     
     for subgroup in group.children:
-        schedule_notitifation_events_for_group(
+        schedule_notification_events_for_group(
             notification=notification,
             group=subgroup,
             db_session=db_session
@@ -302,11 +304,10 @@ def reschedule_notification_events_for_all(
 ) -> None:
     """
     Reschedules notification events for all groups and users.
-    Does not commit changes in database!
     """
     # check if notification needs to be scheduled
     if notification.type \
-    not in (NotificationType.user_start, NotificationType.user_end):
+    not in (NotificationType.task_start, NotificationType.task_end):
         return
     
     for user in notification.receivers_users:
@@ -330,7 +331,6 @@ def remove_notification_scheduling_for_task(
 ) -> None:
     """
     Removes notification scheduling for task.
-    Does not commit changes in database!
     """
     for event in notification.events:
         if event.task == task:
@@ -343,7 +343,6 @@ def remove_notification_scheduling_for_user(
 ) -> None:
     """
     Removes notification scheduling for user.
-    Does not commit changes in database!
     """
     for task in user.tasks:
         remove_notification_scheduling_for_task(
@@ -359,7 +358,6 @@ def remove_notification_scheduling_for_group(
 ) -> None:
     """
     Removes notification scheduling for group.
-    Does not commit changes in database!
     """
     for user in group.members:
         remove_notification_scheduling_for_user(
@@ -381,7 +379,6 @@ def remove_notification_scheduling_for_all(
 ) -> None:
     """
     Removes notification scheduling for all groups and users.
-    Does not commit changes in database!
     """
     for user in notification.receivers_users:
         remove_notification_scheduling_for_user(

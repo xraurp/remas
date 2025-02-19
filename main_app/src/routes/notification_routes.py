@@ -116,11 +116,14 @@ def notification_unassign(
         unassign=True
     )
 
-@notification_route.get("/group/{group_id}", response_model=GroupNotifications)
+@notification_route.get(
+    "/group/{group_id}",
+    response_model=list[GroupNotifications]
+)
 def notification_get_by_group_id(
     group_id: int,
     db_session: SessionDep
-) -> GroupNotifications:
+) -> list[GroupNotifications]:
     """
     Returns notifications by group id
     """
