@@ -305,6 +305,7 @@ class EventType(enum.Enum):
     task_end = "task_end"
     other = "other"
 
+'''
 class EventHasNotificaton(SQLModel, table=True):
     """
     Connection table between event and notification.
@@ -321,6 +322,7 @@ class EventHasNotificaton(SQLModel, table=True):
         primary_key=True,
         ondelete="CASCADE"
     )
+'''
 
 class Event(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
@@ -335,10 +337,17 @@ class Event(SQLModel, table=True):
         ondelete="CASCADE"
     )
     task: Task = Relationship(back_populates="events")
-    notifications: list["Notification"] = Relationship(
-        back_populates="events",
-        link_model=EventHasNotificaton
+    notification_id: int | None = Field(
+        default=None,
+        foreign_key="notification.id",
+        ondelete="CASCADE"
     )
+    notification: "Notification" = Relationship(back_populates="events")
+
+class NotificationType(enum.Enum):
+    task_start = "task_start"
+    task_end = "task_end"
+    other = "other"
 
 class Notification(SQLModel, table=True):
     """
@@ -350,6 +359,7 @@ class Notification(SQLModel, table=True):
     # Time offset in seconds
     time_offset: int | None = Field(default=None)
     notification_content: str | None = None
+    type: NotificationType = Field(default=NotificationType.other)
 
     # User that created the notification
     owner_id: int | None = Field(
@@ -360,8 +370,8 @@ class Notification(SQLModel, table=True):
     owner: User | None = Relationship(back_populates="created_notifications")
 
     events: list[Event] = Relationship(
-        back_populates="notifications",
-        link_model=EventHasNotificaton
+        back_populates="notification",
+        cascade_delete=True
     )
     receivers_users: list[User] = Relationship(
         back_populates="notifications",

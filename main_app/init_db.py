@@ -21,7 +21,7 @@ from src.db.models import (
     EventType,
     Event,
     Notification,
-    EventHasNotificaton,
+    #EventHasNotificaton,
     Limit,
     NodeIsLimitedBy
 )

@@ -21,6 +21,10 @@ from src.schemas.task_entities import (
 )
 from src.schemas.user_entities import UserNoPasswordSimple
 from src.app_logic.limit_operations import get_all_user_limits
+from src.app_logic.notification_operations import (
+    get_notifications_by_user_id,
+    schedule_notification_events_for_task
+)
 from fastapi import HTTPException
 from datetime import datetime
 
@@ -303,6 +307,28 @@ def update_task_from_request(
         existing_task=existing_task
     )
 
+def reschedule_task_notifications(
+    task: Task,
+    owner_id: int,
+    db_session: Session
+) -> None:
+    """
+    Reschedules notifications for task.
+    :param task (Task): task to reschedule
+    :param owner_id (int): id of task owner
+    :param db_session (Session): database session
+    """
+    notifications = get_notifications_by_user_id(
+        user_id=owner_id,
+        db_session=db_session
+    )
+    for notification in notifications:
+        reschedule_notification(
+            notification=notification,
+            task=task,
+            db_session=db_session
+        )
+
 def schedule_task(
     task: CreateTaskRequest,
     owner_id: int,
@@ -321,7 +347,7 @@ def schedule_task(
             detail="Task must have at least one resource allocation!"
         )
     if task.start_time >= task.end_time:
-        raise ValueError(
+        raise HTTPException(
             status_code=400,
             detail="Task start time must be before its end time!"
         )
@@ -470,7 +496,17 @@ def schedule_task(
             status_code=409,
             detail="Task with the same name already exists!"
         )
+    
+    # reschedule task notifications
+    db_session.refresh(existing_task)
+    reschedule_task_notifications(
+        task=existing_task,
+        owner_id=owner_id,
+        db_session=db_session
+    )
+    db_session.commit()
     # TODO - unlock the task table after scheduling
+    
     db_session.refresh(existing_task)
     return generate_task_response_full(task=existing_task)
 
