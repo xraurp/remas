@@ -1,5 +1,6 @@
 from src.db.models import User
 from src.schemas.user_entities import UpdateUserRequest
+from src.app_logic.authentication import get_password_hash
 from sqlmodel import select, Session
 from fastapi import HTTPException
 
@@ -12,6 +13,8 @@ def create_user(
     """
     Creates new user.
     """
+    user.id = None
+    user.password = get_password_hash(user.password)
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)

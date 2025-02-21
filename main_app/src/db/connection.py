@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy import Engine
-from src.config import Settings
+from src.config import get_settings
 
 
 # Global object to store database engine
@@ -12,7 +12,7 @@ def init_db_engine() -> None:
     """
     global DB_ENGINE
     DB_ENGINE = create_engine(
-        url=Settings().database_url
+        url=get_settings().database_url
         #,echo=True  # DEBUG
     )
 

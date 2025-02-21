@@ -6,9 +6,9 @@ if __name__ == "__main__":
     """
     import uvicorn
     import os
-    from src.config import Settings
+    from src.config import get_settings
 
-    settings = Settings()
+    settings = get_settings()
 
     uvicorn.run(
         app="src.main:app",

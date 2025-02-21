@@ -1,8 +1,7 @@
-from functools import lru_cache
 from fastapi import FastAPI
-from src.config import Settings
 from contextlib import asynccontextmanager
 from src.db.connection import init_db_engine
+#from src.app_logic.authentication import init_auth
 from src.routes import (
     user_route,
     group_route,
@@ -12,23 +11,21 @@ from src.routes import (
     task_route,
     task_tag_route,
     limit_route,
-    notification_route
+    notification_route,
+    authentication_route
 )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup tasks
     init_db_engine()
+    #init_auth()
     yield
     # Cleanup tasks
 
 
 app = FastAPI(lifespan=lifespan)
 
-
-@lru_cache
-def get_settings():
-    return Settings()
 
 @app.get("/")
 async def root():
@@ -43,3 +40,4 @@ app.include_router(task_route)
 app.include_router(task_tag_route)
 app.include_router(limit_route)
 app.include_router(notification_route)
+app.include_router(authentication_route)

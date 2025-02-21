@@ -25,6 +25,7 @@ from src.db.models import (
     Limit,
     NodeIsLimitedBy
 )
+from src.app_logic.authentication import get_password_hash
 import argparse
 from sqlalchemy import Engine
 from sqlmodel import Session
@@ -51,7 +52,7 @@ def insert_default_data(engine: Engine) -> None:
             surname="Admin",
             email="admin@localhost",
             username="admin",
-            password="admin"
+            password=get_password_hash("admin"),
         )
         session.add(user)
         session.commit()
@@ -64,7 +65,7 @@ def insert_test_data(engine: Engine) -> None:
             surname="Test",
             email="test@localhost",
             username="test",
-            password="test"
+            password=get_password_hash("test")
         ))
         session.add(Node(
             name="TestNode",
