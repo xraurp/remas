@@ -22,9 +22,10 @@ oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="token")
 # Dependency injection for token, used in endpoint requiring authentication
 tokenDep = Annotated[str, Depends(oauth2_scheme)]
 
-#def init_auth() -> None:
-#    global oauth2_scheme
-#    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+insufficientPermissionsException = HTTPException(
+    status_code=403,
+    detail="Insufficient permissions!"
+)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -205,3 +206,12 @@ def set_user_password(
         )
     user.password = get_password_hash(request.new_password)
     db_session.commit()
+
+def ensure_admin_permissions(current_user: CurrentUserInfo) -> None:
+    """
+    Checks if current user has admin permissions.
+    :param current_user (CurrentUserInfo): currently logged in user info
+    :raise HTTPException: if user is not admin
+    """
+    if not current_user.is_admin:
+        raise insufficientPermissionsException

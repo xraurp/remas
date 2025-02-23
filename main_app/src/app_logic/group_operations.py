@@ -1,4 +1,10 @@
 from src.db.models import Group, User
+from src.schemas.group_entities import (
+    UserGroupChangeRequest,
+    GroupChangeParentRequest
+)
+from src.schemas.authentication_entities import CurrentUserInfo
+from src.app_logic.authentication import insufficientPermissionsException
 from sqlmodel import select, Session
 from fastapi import HTTPException
 
@@ -17,10 +23,20 @@ def create_group(
     db_session.refresh(group)
     return group
 
-def get_group(group_id: int, db_session: Session) -> Group:
+def get_group(
+    group_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> Group:
     """
     Returns group by id.
     """
+    # check if user is admin or member of the group
+    if not current_user.is_admin:
+        user = db_session.get(User, current_user.id)
+        if not user.group_id == group_id:
+            raise insufficientPermissionsException
+    
     return db_session.get(Group, group_id)
 
 def get_all_groups(db_session: Session) -> list[Group]:
@@ -70,53 +86,60 @@ def delete_group(group_id: int, db_session: Session) -> None:
     db_session.delete(db_group)
     db_session.commit()
 
-def add_users_to_group(
-    group_id: int,
-    user_ids: list[int],
+def add_user_to_group(
+    request: UserGroupChangeRequest,
     db_session: Session
 ) -> Group:
     """
-    Adds users to group.
+    Adds user to group.
     """
-    group = db_session.get(Group, group_id)
+    group = db_session.get(Group, request.group_id)
     if not group:
         raise HTTPException(
             status_code=404,
-            detail=f"Group with id {group_id} not found!"
+            detail=f"Group with id {request.group_id} not found!"
         )
-    for user_id in user_ids:
-        user = db_session.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=404,
-                detail=f"User with id {user_id} not found!"
-            )
-        group.members.append(user)
+    user = db_session.get(User, request.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {request.user_id} not found!"
+        )
+    group.members.append(user)
     db_session.commit()
     db_session.refresh(group)
     return group
 
 def change_group_parent(
-    group_id: int,
-    parent_id: int,
+    request: GroupChangeParentRequest,
     db_session: Session
 ) -> Group:
     """
     Changes group parent.
     """
-    group = db_session.get(Group, group_id)
-    parent = db_session.get(Group, parent_id)
+    if request.group_id == request.parent_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change group parent to itself!"
+        )
+    group = db_session.get(Group, request.group_id)
+    parent = db_session.get(Group, request.parent_id)
     if not group:
         raise HTTPException(
             status_code=404,
-            detail=f"Group with id {group_id} not found!"
+            detail=f"Group with id {request.group_id} not found!"
         )
     if not parent:
         raise HTTPException(
             status_code=404,
-            detail=f"Group with id {parent_id} not found!"
+            detail=f"Group with id {request.parent_id} not found!"
         )
-    group.parent_id = parent_id
+    if group.id <= 3:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot change default groups!"
+        )
+    group.parent_id = request.parent_id
     db_session.commit()
     db_session.refresh(group)
     return group

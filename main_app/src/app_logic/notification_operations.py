@@ -15,6 +15,8 @@ from src.schemas.notification_entities import (
     AssignNotificationRequest,
     GroupNotifications
 )
+from src.schemas.authentication_entities import CurrentUserInfo
+from src.app_logic.authentication import insufficientPermissionsException
 from datetime import datetime, timedelta
 
 def get_all_notifications(db_session: Session) -> list[Notification]:
@@ -39,20 +41,27 @@ def get_notification(notification_id: int, db_session: Session) -> Notification:
 
 def create_notification(
     notification: Notification,
-    user_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> Notification:
     """
     Creates new notification
     """
     notification.id = None
-    notification.owner_id = user_id
+    if current_user.is_admin:
+        notification.owner_id = None
+    else:
+        notification.owner_id = current_user.user_id
     db_session.add(notification)
     db_session.commit()
     db_session.refresh(notification)
     return notification
 
-def remove_notification(notification_id: int, db_session: Session) -> None:
+def remove_notification(
+    notification_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> None:
     """
     Removes notification
     """
@@ -62,12 +71,18 @@ def remove_notification(notification_id: int, db_session: Session) -> None:
             status_code=404,
             detail=f"Notification with id {notification_id} not found!"
         )
+    if notification.owner_id != current_user.user_id \
+    and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Can't remove notification owned by another user!"
+        )
     db_session.delete(notification)
     db_session.commit()
 
 def update_notification(
     notification: Notification,
-    user_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> Notification:
     """
@@ -79,8 +94,8 @@ def update_notification(
             status_code=404,
             detail=f"Notification with id {notification.id} not found!"
         )
-    # TODO - check admin
-    if db_notification.owner_id != user_id:
+    if db_notification.owner_id != current_user.user_id \
+    and not current_user.is_admin:
         raise HTTPException(
             status_code=403,
             detail=f"Can't update notification owned by another user!"
@@ -110,6 +125,7 @@ def update_notification(
 
 def assign_or_unassign_notification(
     assignment_request: AssignNotificationRequest,
+    current_user: CurrentUserInfo,
     db_session: Session,
     unassign: bool = False
 ) -> Notification:
@@ -117,6 +133,7 @@ def assign_or_unassign_notification(
     Assigns / unassignes notification to/from user or group in the request.
     :param assignment_request (AssignNotificationRequest): request with id of
         group or user to which notification will be assigned / removed from
+    :param current_user (CurrentUserInfo): current user
     :param db_session (Session): database session to use
     :param unassign (bool): tells if the notification should be assigned to the
         user / group or if notificaton they already have should be unassigned
@@ -139,6 +156,26 @@ def assign_or_unassign_notification(
                     " not found!"
         )
     
+    if not current_user.is_admin:
+        if assignment_request.group_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Can't assign/unassign notification to/from group! "
+                       "Insufficient permissions!"
+            )
+        if assignment_request.user_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Can't assign/unassign notification to/from another "
+                       "user!"
+            )
+        if db_notification.owner_id != current_user.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Can't assign/unassign notification owned by another "
+                       "user!"
+            )
+    
     if assignment_request.user_id:
         user = db_session.get(User, assignment_request.user_id)
         if not user:
@@ -159,7 +196,7 @@ def assign_or_unassign_notification(
     else:
         group = None
     
-    if unassign:
+    if unassign:  # remove notification assignment
         if user and user in db_notification.receivers_users:
             db_notification.receivers_users.remove(user)
             db_session.commit()
@@ -176,7 +213,7 @@ def assign_or_unassign_notification(
                 group=group,
                 db_session=db_session
             )
-    else:
+    else:  # assign notification
         if user and user not in db_notification.receivers_users:
             db_notification.receivers_users.append(user)
             db_session.commit()
@@ -426,6 +463,7 @@ def get_all_notifications_for_user(user: User) -> list[GroupNotifications]:
 
 def get_notifications_by_group_id(
     group_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> list[GroupNotifications]:
     """
@@ -437,10 +475,15 @@ def get_notifications_by_group_id(
             status_code=404,
             detail=f"Group with id {group_id} not found!"
         )
+    if not current_user.is_admin:
+        user = db_session.get(User, current_user.user_id)
+        if not user.group_id == group_id:
+            raise insufficientPermissionsException
     return get_all_notifications_for_group(group=group)
 
 def get_notifications_by_user_id(
     user_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> list[GroupNotifications]:
     """
@@ -452,4 +495,7 @@ def get_notifications_by_user_id(
             status_code=404,
             detail=f"User with id {user_id} not found!"
         )
+    if not current_user.is_admin:
+        if not current_user.user_id == user_id:
+            raise insufficientPermissionsException
     return get_all_notifications_for_user(user=user)

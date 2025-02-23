@@ -16,3 +16,11 @@ class GroupResponse(BaseModel):
     members: list[UserNoPasswordSimple]
     limits: list[Limit]
     notifications: list[Notification]
+
+class UserGroupChangeRequest(BaseModel):
+    user_id: int
+    group_id: int
+
+class GroupChangeParentRequest(BaseModel):
+    group_id: int
+    parent_id: int

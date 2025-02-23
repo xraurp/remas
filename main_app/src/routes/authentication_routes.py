@@ -10,7 +10,7 @@ from src.schemas.authentication_entities import (
     ChangePasswordRequest,
     SetUserPasswordRequest
 )
-from . import SessionDep, loginDep
+from . import SessionDep, LoginDep
 from typing import Annotated
 
 authentication_route = APIRouter(
@@ -34,7 +34,7 @@ def get_token(
 @authentication_route.post("/change-password", response_model=dict)
 def change_password(
     request: ChangePasswordRequest,
-    current_user: loginDep,
+    current_user: LoginDep,
     session: SessionDep
 ) -> dict:
     """
@@ -50,7 +50,7 @@ def change_password(
 @authentication_route.post("/set-password", response_model=dict)
 def set_password(
     request: SetUserPasswordRequest,
-    current_user: loginDep,
+    current_user: LoginDep,
     session: SessionDep
 ) -> dict:
     """

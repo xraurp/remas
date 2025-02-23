@@ -8,7 +8,7 @@ from src.schemas.authentication_entities import CurrentUserInfo
 
 
 SessionDep = Annotated[Session, Depends(get_db_session)]
-loginDep = Annotated[CurrentUserInfo, Depends(verify_login)]
+LoginDep = Annotated[CurrentUserInfo, Depends(verify_login)]
 
 # import routes
 from .user_routes import user_route

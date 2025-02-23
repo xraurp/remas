@@ -7,7 +7,8 @@ from src.db.models import (
     TaskStatus,
     TaskTag,
     TaskHasTag,
-    Limit
+    Limit,
+    User
 )
 from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
@@ -20,13 +21,18 @@ from src.schemas.task_entities import (
     ResourceAllocationRequest,
 )
 from src.schemas.user_entities import UserNoPasswordSimple
-from src.app_logic.limit_operations import get_all_user_limits
+from src.app_logic.limit_operations import get_all_user_limits_dict
 from src.app_logic.notification_operations import (
     get_notifications_by_user_id,
     schedule_notification_events_for_task
 )
+from src.app_logic.authentication import insufficientPermissionsException
+from src.schemas.authentication_entities import CurrentUserInfo
 from fastapi import HTTPException
 from datetime import datetime
+
+# TODO - add selecting by tag
+# TODO - add get statistics by tag and share resources in groups
 
 def generate_task_response_full(task: Task) -> TaskResponseFull:
     return TaskResponseFull(
@@ -77,7 +83,29 @@ def get_all_tasks(db_session: Session) -> list[TaskResponseSimple]:
         for task in db_session.scalars(select(Task)).all()
     ]
 
-def get_task(task_id: int, db_session: Session) -> TaskResponseFull:
+def get_user_tasks(
+    user_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> list[TaskResponseSimple]:
+    """
+    Returns tasks owned by specified user.
+    """
+    if not current_user.is_admin:
+        if current_user.user_id != user_id:
+            raise insufficientPermissionsException
+    return [
+        generate_task_response_simple(task=task)
+        for task in db_session.scalars(
+            select(Task).where(Task.owner_id == user_id)
+        ).all()
+    ]
+
+def get_task(
+    task_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> TaskResponseFull:
     """
     Returns task by id
     """
@@ -87,6 +115,17 @@ def get_task(task_id: int, db_session: Session) -> TaskResponseFull:
             status_code=404,
             detail=f"Task with id {task_id} not found!"
         )
+    user = db_session.get(User, current_user.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {current_user.user_id} not found!"
+        )
+    if not current_user.is_admin:
+        if current_user.user_id != task.owner_id:
+            if user.group_id != task.owner.group_id \
+            or not user.group.users_share_statistics:
+                raise insufficientPermissionsException
     return generate_task_response_full(task=task)
 
 
@@ -318,17 +357,19 @@ def update_task_from_request(
 
 def reschedule_task_notifications(
     task: Task,
-    owner_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> None:
     """
     Reschedules notifications for task.
     :param task (Task): task to reschedule
-    :param owner_id (int): id of task owner
+    :param current_user (CurrentUserInfo): currently logged in user information
     :param db_session (Session): database session
     """
+    # TODO - add current user data
     notifications = get_notifications_by_user_id(
-        user_id=owner_id,
+        user_id=current_user.user_id,
+        current_user=current_user,
         db_session=db_session
     )
     for grop_notifications in notifications:
@@ -341,13 +382,13 @@ def reschedule_task_notifications(
 
 def schedule_task(
     task: CreateTaskRequest,
-    owner_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> TaskResponseFull:
     """
     Adds task or updates existing one.
     :param task (CreateTaskRequest): task to schedule
-    :param owner_id (int): id of task owner
+    :param current_user (CurrentUserInfo): currently logged in user information
     :param db_session (Session): database session
     :return (TaskResponse): scheduled task
     """
@@ -371,7 +412,7 @@ def schedule_task(
                 status_code=404,
                 detail=f"Task with id {task.id} not found!"
             )
-        if existing_task.owner_id != owner_id:
+        if existing_task.owner_id != current_user.user_id:
             raise HTTPException(
                 status_code=403,
                 detail="Task is not owned by current user!"
@@ -412,7 +453,10 @@ def schedule_task(
         node_resources[task_ra.node_id][task_ra.resource_id] = None
     
     # Check if resource allocation does not exeeds limits
-    user_limits = get_all_user_limits(user_id=owner_id, session=db_session)
+    user_limits = get_all_user_limits_dict(
+        user_id=current_user.user_id,
+        session=db_session
+    )
     check_user_limit(
         user_limits=user_limits,
         required_nodes_resources=required_nodes_resources
@@ -496,7 +540,7 @@ def schedule_task(
     else:
         existing_task = taskrequest_to_task(
             task=task,
-            owner_id=owner_id,
+            owner_id=current_user.user_id,
             db_session=db_session
         )
     try:
@@ -511,7 +555,7 @@ def schedule_task(
     db_session.refresh(existing_task)
     reschedule_task_notifications(
         task=existing_task,
-        owner_id=owner_id,
+        current_user=current_user,
         db_session=db_session
     )
     db_session.commit()
@@ -520,7 +564,11 @@ def schedule_task(
     db_session.refresh(existing_task)
     return generate_task_response_full(task=existing_task)
 
-def remove_task(task_id: int, db_session: Session) -> None:
+def remove_task(
+    task_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> None:
     """
     Removes task
     """
@@ -530,12 +578,17 @@ def remove_task(task_id: int, db_session: Session) -> None:
             status_code=404,
             detail=f"Task with id {task_id} not found!"
         )
+    if task.owner_id != current_user.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Can't remove task owned by another user!"
+        )
     db_session.delete(task)
     db_session.commit()
 
 def add_tag_to_task(
     task_tag_request: TaskHasTag,
-    user_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> Task:
     """
@@ -547,7 +600,7 @@ def add_tag_to_task(
             status_code=404,
             detail=f"Tag with id {task_tag_request.tag_id} not found!"
         )
-    if tag.user_id != user_id:
+    if tag.user_id != current_user.user_id:
         raise HTTPException(
             status_code=403,
             detail=f"Can't add tag owned by another user!"
@@ -558,7 +611,7 @@ def add_tag_to_task(
             status_code=404,
             detail=f"Task with id {task_tag_request.task_id} not found!"
         )
-    if task.owner_id != user_id:
+    if task.owner_id != current_user.user_id:
         raise HTTPException(
             status_code=403,
             detail="Can't add tag to task owned by another user!"
@@ -576,7 +629,7 @@ def add_tag_to_task(
 
 def remove_tag_from_task(
     task_tag_request: TaskHasTag,
-    user_id: int,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> Task:
     """
@@ -588,7 +641,7 @@ def remove_tag_from_task(
             status_code=404,
             detail=f"Tag with id {task_tag_request.tag_id} not found!"
         )
-    if tag.user_id != user_id:
+    if tag.user_id != current_user.user_id:
         raise HTTPException(
             status_code=403,
             detail=f"Can't remove tag owned by another user!"
@@ -599,7 +652,7 @@ def remove_tag_from_task(
             status_code=404,
             detail=f"Task with id {task_tag_request.task_id} not found!"
         )
-    if task.owner_id != user_id:
+    if task.owner_id != current_user.user_id:
         raise HTTPException(
             status_code=403,
             detail="Can't remove tag from task owned by another user!"

@@ -3,6 +3,11 @@ from sqlmodel import select, Session
 from src.schemas.limit_entities import LimitRequest, LimitResponse
 from fastapi import HTTPException
 from sqlalchemy.exc import NoResultFound
+from src.schemas.authentication_entities import CurrentUserInfo
+from src.app_logic.authentication import insufficientPermissionsException
+
+# TODO - when adding limit, check if node is limited by diferent
+#        limit in the same group / user
 
 def get_limits_by_user(user_id: int, session: Session) -> list[Limit]:
     """
@@ -138,7 +143,7 @@ def remove_limit(limit_id: int, session: Session) -> None:
     session.delete(limit)
     session.commit()
 
-def get_all_group_limits(
+def get_all_group_limits_dict(
     group_id: int,
     session: Session
 ) -> dict[int, dict[int, Limit]]:
@@ -157,7 +162,7 @@ def get_all_group_limits(
         )
 
     if group.parent_id:
-        limits = get_all_group_limits(
+        limits = get_all_group_limits_dict(
             group_id=group.parent_id,
             session=session
         )
@@ -174,7 +179,7 @@ def get_all_group_limits(
     return limits
 
 
-def get_all_user_limits(
+def get_all_user_limits_dict(
     user_id: int,
     session: Session
 ) -> dict[int, dict[int, Limit]]:
@@ -192,7 +197,7 @@ def get_all_user_limits(
             detail=f"User with id {user_id} not found!"
         )
     
-    limits = get_all_group_limits(
+    limits = get_all_group_limits_dict(
         group_id=user.group_id,
         session=session
     )
@@ -205,3 +210,77 @@ def get_all_user_limits(
                 limits[limit.resource_id][node.id] = limit
 
     return limits
+
+def get_all_group_limits_list(
+    group_id: int,
+    current_user: CurrentUserInfo,
+    session: Session
+) -> list[LimitResponse]:
+    """
+    Returns all group limits
+    :param group_id (int): group id
+    :param current_user (CurrentUserInfo): current user
+    :param session (Session): database session
+    :return (list[LimitResponse]): group limits
+    """
+    if not current_user.is_admin:
+        user = session.get(User, current_user.user_id)
+        if not user.group_id == group_id:
+            raise insufficientPermissionsException
+    
+    limits = get_all_group_limits_dict(
+        group_id=group_id,
+        session=session
+    )
+
+    limit_list = []
+    for resource_id, nodes in limits.items():
+        for node_id, limit in nodes.items():
+            lim_response = LimitResponse(
+                id=limit.id,
+                name=limit.name,
+                description=limit.description,
+                amount=limit.amount,
+                group=limit.group,
+                resource=limit.resource,
+                nodes=limit.nodes
+            )
+            if lim_response not in limit_list:
+                limit_list.append(lim_response)
+    return limit_list
+
+def get_all_user_limits_list(
+    user_id: int,
+    current_user: CurrentUserInfo,
+    session: Session
+) -> list[LimitResponse]:
+    """
+    Returns all user limits
+    :param user_id (int): user id
+    :param current_user (CurrentUserInfo): current user
+    :param session (Session): database session
+    :return (list[LimitResponse]): user limits
+    """
+    if not current_user.is_admin and not current_user.user_id == user_id:
+        raise insufficientPermissionsException
+
+    limits = get_all_user_limits_dict(
+        user_id=user_id,
+        session=session
+    )
+
+    limit_list = []
+    for resource_id, nodes in limits.items():
+        for node_id, limit in nodes.items():
+            lim_response = LimitResponse(
+                id=limit.id,
+                name=limit.name,
+                description=limit.description,
+                amount=limit.amount,
+                group=limit.group,
+                resource=limit.resource,
+                nodes=limit.nodes
+            )
+            if lim_response not in limit_list:
+                limit_list.append(lim_response)
+    return limit_list

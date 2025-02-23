@@ -44,8 +44,8 @@ class User(SQLModel, table=True):
     password: str
     email: str = Field(index=True)
 
-    # User is by default member of group 2 ("users")
-    group_id: int = Field(default=2, foreign_key="group.id")
+    # User is by default member of group 3 ("users")
+    group_id: int = Field(default=3, foreign_key="group.id")
     group: "Group" = Relationship(back_populates="members")
 
     limits: list["Limit"] = Relationship(
