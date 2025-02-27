@@ -37,15 +37,25 @@ scrape_configs:
   static_configs:
   - targets:
     - localhost:9090
+
 - job_name: process_exporter_localhost
-  scrape_interval: 10s
   static_configs:
   - targets: ['remas-prometheus-process-exporter:9256']
     labels:
       group: localhost
 - job_name: process_exporter_test_node
-  scrape_interval: 10s
   static_configs:
   - targets: ['192.168.122.84:9256']
+    labels:
+      group: test-node
+
+- job_name: node_exporter_localhost
+  static_configs:
+  - targets: ['remas-prometheus-node-exporter:9100']
+    labels:
+      group: localhost
+- job_name: node_exporter_test_node
+  static_configs:
+  - targets: ['192.168.122.84:9100']
     labels:
       group: test-node

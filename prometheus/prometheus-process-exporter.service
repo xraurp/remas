@@ -8,4 +8,4 @@ ExecStart=/usr/local/bin/prometheus-process-exporter.sh
 Restart=no
 
 [Install]
-WantedBy=multi-user target
+WantedBy=multi-user.target

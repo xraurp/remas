@@ -10,11 +10,12 @@ services:
     networks:
       - remas
       - vm_pass_thru
-    restart: unless-stopped
+    restart: no
   
   prometheus-process-exporter:
     image: ncabatoff/process-exporter:sha-b2740a6
     container_name: remas-prometheus-process-exporter
+    pid: host
     ports:
       - "127.0.0.1:9256:9256"
     volumes:
@@ -23,7 +24,24 @@ services:
     command: --procfs /host/proc -config.path /config/process-exporter-config.yml
     networks:
       - remas
-    restart: unless-stopped
+    restart: no
+
+  prometheus-node-exporter:
+    image: prom/node-exporter:v1.9.0
+    container_name: remas-prometheus-node-exporter
+    pid: host
+    ports:
+      - "127.0.0.1:9100:9100"
+    volumes:
+      - /:/rootfs:ro,rslave
+    command: --path.rootfs /rootfs
+    networks:
+      # For simplicity the same docker network is used as for other services.
+      # On real monitored nodes network should be set to 'host' to be able to
+      # monitor the node itself ('--network host' for docker run command or
+      # 'network_mode: host' option for docker compose).
+      - remas
+    restart: no
 
   postgres:
     image: postgres:17
@@ -38,7 +56,7 @@ services:
       - "127.0.0.1:15432:5432"
     networks:
       - remas
-    restart: unless-stopped
+    restart: no
 
   grafana:
     image: grafana/grafana-oss:11.5.2
@@ -57,7 +75,7 @@ services:
       - ./grafana-data/data:/var/lib/grafana
     networks:
       - remas
-    restart: unless-stopped
+    restart: no
 
 networks:
   remas:
