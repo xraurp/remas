@@ -1,5 +1,14 @@
 # postgres database data
 postgres-data/
+grafana-data/
+prometheus-data/
+
+# Config files
+smtp.conf
+main_app/env_vars.sh
+
+# Test file
+main_app/tmp.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

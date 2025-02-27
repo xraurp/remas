@@ -6,12 +6,14 @@ services:
       - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-data/data:/prometheus
     networks:
       - remas
+      - vm_pass_thru
     restart: unless-stopped
   
   prometheus-process-exporter:
-    image: ncabatoff/process-exporter:latest
+    image: ncabatoff/process-exporter:sha-b2740a6
     container_name: remas-prometheus-process-exporter
     ports:
       - "127.0.0.1:9256:9256"
@@ -38,5 +40,34 @@ services:
       - remas
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana-oss:11.5.2
+    container_name: remas-grafana
+    environment:
+      GF_SMTP_ENABLED: ${SMTP_ENABLED}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS}
+      GF_SMTP_FROM_NAME: ${SMTP_FROM_NAME}
+      GF_SMTP_USER: ${SMTP_USER}
+      GF_SMTP_PASSWORD: ${SMTP_PASSWORD}
+      GF_SMTP_HOST: "${SMTP_HOST}:${SMTP_PORT}"
+      GF_SMTP_SKIP_VERIFY: ${SMTP_SKIP_TLS_VERIFICATION}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana-data/data:/var/lib/grafana
+    networks:
+      - remas
+    restart: unless-stopped
+
 networks:
   remas:
+  # pass-thru to virtual machine network used by KVM
+  vm_pass_thru:
+    driver: macvlan
+    ipam:
+      config:
+        - subnet: 192.168.122.0/24
+          ip_range: 192.168.122.16/28
+          gateway: 192.168.122.1
+    driver_opts:
+      parent: virbr0

@@ -1,3 +1,0 @@
-#!/bin/sh
-export SECRET_KEY=7b63c32472bebe58b998248e5abb28e1a1e3cd6e6875ee84fae806df5af3316d
-

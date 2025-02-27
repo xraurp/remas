@@ -1,0 +1,11 @@
+[Unit]
+Description=Prometheus process exporter
+
+[Service]
+User=root
+WorkingDirectory=/etc/prometheus-process-exporter
+ExecStart=/usr/local/bin/prometheus-process-exporter.sh
+Restart=no
+
+[Install]
+WantedBy=multi-user target

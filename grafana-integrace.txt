@@ -1,0 +1,23 @@
+1. Alert pravidla
+    1. 1. Při vytvoření uživatele, uzlu, nebo přiřazení zdroji uzlu se přidá
+          pro každého uživatele defaultní pravidlo využití.
+    1. 2. Při vytvoření uživatele se pro něj vytvoří contact point.
+    1. 3. Když začne uživatelská úloha, tak se pravidlo přenastaví tak, že
+          uživatel může využít zdroj v požadovaném množství.
+    1. 4. Při konci úlohy se pravidla přenastaví zpět na výchozí.
+    1. 5. Routing notifikací může být podel UID. Také tam bude tag pro to,
+          jestli má notifikaci dostat i admin.
+2. Dashboardy
+    2. 1. Při vytvoření uzlu se pro něj vytvoří dashboard s node exporter
+          panely.
+    2. 2. Při startu úlohy se pro ni vytvoří dashboard s metrikami pro
+          měření využití zdrojů uživateli. Grafy jsou omezené na dobu trvání
+          úlohy.
+3. Autentizace
+    3. 1. Uživatel se bude přihlašovat tokenem.
+    3. 2. Uživatel bude mít vlsatní složku pro statistiky úloh a automatické
+          alerty.
+    3. 3. Každý uživatel bude mít vlastní složku pro vytváření vlastních
+          dashboardů a alertů.
+    3. 4. Uživatel může přistupovat k defaultním dashboardům uzlů a statistikám
+          úloh, které vytvořili jiní uživatelé.
