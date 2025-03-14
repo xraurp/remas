@@ -10,8 +10,6 @@ from src.db.models import (
     ResourceAlertTemplate
 )
 import httpx
-from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from src.config import get_settings
 from fastapi import HTTPException
 from src.app_logic.notification_operations import get_all_notifications_for_user
@@ -300,34 +298,6 @@ def grafana_add_all_task_allerts(task: Task) -> None:
                 resource_allocation=resource_allocation,
                 template=template
             )
-
-def add_curent_task_alerts(user: User, db_session: Session) -> None:
-    """
-    Adds current task alerts to Grafana.
-    """
-    time_trashold = datetime.now() + timedelta(minutes=1)
-    # get current tasks for given user
-    tasks = db_session.query(Task).filter(
-        Task.status.in_([TaskStatus.running, TaskStatus.scheduled]),
-        Task.owner_id == user.id,
-        Task.start_time <= time_trashold
-    ).all()
-
-    required_resources = {}
-
-    for task in tasks:
-        if task.end_time <= time_trashold:
-            continue
-        for ra in task.resource_allocations:
-            if ra.node_id not in required_resources:
-                required_resources[ra.node_id] = {}
-            if ra.resource_id not in required_resources[ra.node_id]:
-                required_resources[ra.node_id][ra.resource_id] = ra.amount
-            else:
-                required_resources[ra.node_id][ra.resource_id] += ra.amount
-
-
-
 
 # TODO - add task alert
 # TODO - remove task alert
