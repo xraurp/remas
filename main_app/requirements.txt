@@ -4,4 +4,4 @@ pydantic-settings
 psycopg2-binary
 pyjwt
 bcrypt
-
+httpx

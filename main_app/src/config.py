@@ -13,6 +13,27 @@ class Settings(BaseSettings):
     access_token_secret_key: str = os.environ.get('SECRET_KEY')
     access_token_signing_algorithm: str = os.environ.get('ALGORITHM', 'HS256')
     access_token_expire_minutes: int = 60
+    # grafana config
+    grafana_url: str = os.environ.get(
+        'GRAFANA_URL',
+        'http://localhost:3000/'
+    )
+    grafana_username: str = os.environ.get('GRAFANA_USERNAME', 'admin')
+    grafana_password: str = os.environ.get('GRAFANA_PASSWORD', 'admin')
+
+    # grafana user system folder templates
+    grafana_user_system_folder_templates: list[str] = [
+        '${user_name}_task_alerts',  # for task specific alerts
+        '${user_name}_tasks',  # for dasboards
+    ]
+    # grafana user folder templates
+    grafana_user_folder_templates: list[str] = [
+        '${user_name}_user_folder'  # for things that user creates manually
+    ]
+    # grafana default folders
+    grafana_default_folders: list[str] = [
+        'node_dashboards'
+    ]
 
 @lru_cache
 def get_settings():

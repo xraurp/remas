@@ -40,6 +40,7 @@ class User(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str | None = None
     surname: str | None = None
+    uid: int = Field(unique=True, index=True)
     username: str = Field(unique=True, index=True)
     password: str
     email: str = Field(index=True)
@@ -131,6 +132,15 @@ class Node(SQLModel, table=True):
         link_model=NodeIsLimitedBy
     )
 
+    dashboard_template_id: int = Field(
+        default=None,
+        foreign_key="nodedashboardtemplate.id",
+        ondelete="RESTRICT"
+    )
+    dashboard_template: "NodeDashboardTemplate" = Relationship(
+        back_populates="node"
+    )
+
 class ResourceHasAlias(SQLModel, table=True):
     """
     Connection table between resource and alias.
@@ -167,6 +177,12 @@ class Resource(SQLModel, table=True):
     aliases: list["ResourceAlias"] = Relationship(
         back_populates="resources",
         link_model=ResourceHasAlias
+    )
+    alert_templates: list["ResourceAlertTemplate"] = Relationship(
+        back_populates="resource"
+    )
+    panel_templates: list["ResourcePanelTemplate"] = Relationship(
+        back_populates="resource"
     )
 
 class ResourceAlias(SQLModel, table=True):
@@ -347,6 +363,11 @@ class Event(SQLModel, table=True):
 class NotificationType(enum.Enum):
     task_start = "task_start"
     task_end = "task_end"
+    # Notifies about exceedance of resource during task. When task ends,
+    # notification rule is removed or changed to default value.
+    grafana_resource_exceedance_task = "grafana_resource_exceedance_task"
+    # Notifies about exceedance of resource even when no task is running.
+    grafana_resource_exceedance_general = "grafana_resource_exceedance_general"
     other = "other"
 
 class Notification(SQLModel, table=True):
@@ -381,6 +402,9 @@ class Notification(SQLModel, table=True):
         back_populates="notifications",
         link_model=GroupHasNotification
     )
+    template: "ResourceAlertTemplate" = Relationship(
+        back_populates="notification"
+    )
 
 # TODO - add automatic reaction to events?
 
@@ -414,3 +438,47 @@ class Limit(SQLModel, table=True):
         back_populates="limits",
         link_model=NodeIsLimitedBy
     )
+
+class ResourceAlertTemplate(SQLModel, table=True):
+    """
+    Alert template for given resource. Used for creating alerts in Grafana.
+    """
+    id: int = Field(default=None, primary_key=True)
+    template: str
+    default_amount: int | None = None
+    
+    notification_id: int = Field(
+        default=None,
+        foreign_key="notification.id",
+        ondelete="CASCADE"
+    )
+    notification: Notification = Relationship(back_populates="template")
+    resource_id: int = Field(
+        default=None,
+        foreign_key="resource.id",
+        ondelete="CASCADE"
+    )
+    resource: Resource = Relationship(back_populates="alert_templates")
+
+class ResourcePanelTemplate(SQLModel, table=True):
+    """
+    Template for Grafana panels for given resource.
+    """
+    id: int = Field(default=None, primary_key=True)
+    template: str
+
+    resource_id: int = Field(
+        default=None,
+        foreign_key="resource.id",
+        ondelete="CASCADE"
+    )
+    resource: Resource = Relationship(back_populates="panel_templates")
+
+class NodeDashboardTemplate(SQLModel, table=True):
+    """
+    Template for Grafana dashboards for given Node.
+    """
+    id: int = Field(default=None, primary_key=True)
+    template: str
+
+    nodes: list[Node] = Relationship(back_populates="dashboard_template")
