@@ -178,8 +178,9 @@ class Resource(SQLModel, table=True):
         back_populates="resources",
         link_model=ResourceHasAlias
     )
-    alert_templates: list["ResourceAlertTemplate"] = Relationship(
-        back_populates="resource"
+    notifications: list["Notification"] = Relationship(
+        back_populates="resource",
+        cascade_delete=True
     )
     panel_templates: list["ResourcePanelTemplate"] = Relationship(
         back_populates="resource"
@@ -372,15 +373,21 @@ class NotificationType(enum.Enum):
 
 class Notification(SQLModel, table=True):
     """
-    Notification for time based events like task start/end.
+    Notification for time based events like task start/end or Grafana alerts.
     """
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str | None = None
     # Time offset in seconds
     time_offset: int | None = Field(default=None)
-    notification_content: str | None = None
+    # Notification template - contains notification content for notifications
+    # that are send from this application. For Grafana alerts, it contains
+    # template for creating alerts.
+    notification_template: str | None = None
     type: NotificationType = Field(default=NotificationType.other)
+    # Used for Grafana alerts - contains default amount of resource that user
+    # can use without creating task.
+    default_amount: int | None = None
 
     # User that created the notification
     owner_id: int | None = Field(
@@ -402,9 +409,12 @@ class Notification(SQLModel, table=True):
         back_populates="notifications",
         link_model=GroupHasNotification
     )
-    template: "ResourceAlertTemplate" = Relationship(
-        back_populates="notification"
+    resource_id: int | None = Field(
+        default=None,
+        foreign_key="resource.id",
+        ondelete="CASCADE"
     )
+    resource: Resource | None = Relationship(back_populates="notifications")
 
 # TODO - add automatic reaction to events?
 
@@ -438,27 +448,6 @@ class Limit(SQLModel, table=True):
         back_populates="limits",
         link_model=NodeIsLimitedBy
     )
-
-class ResourceAlertTemplate(SQLModel, table=True):
-    """
-    Alert template for given resource. Used for creating alerts in Grafana.
-    """
-    id: int = Field(default=None, primary_key=True)
-    template: str
-    default_amount: int | None = None
-    
-    notification_id: int = Field(
-        default=None,
-        foreign_key="notification.id",
-        ondelete="CASCADE"
-    )
-    notification: Notification = Relationship(back_populates="template")
-    resource_id: int = Field(
-        default=None,
-        foreign_key="resource.id",
-        ondelete="CASCADE"
-    )
-    resource: Resource = Relationship(back_populates="alert_templates")
 
 class ResourcePanelTemplate(SQLModel, table=True):
     """

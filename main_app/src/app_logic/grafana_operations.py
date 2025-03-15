@@ -6,15 +6,14 @@ from src.db.models import (
     Task,
     User,
     NotificationType,
-    Notification,
-    ResourceAlertTemplate
+    Notification
 )
 import httpx
 from src.config import get_settings
 from fastapi import HTTPException
 from src.app_logic.notification_operations import get_all_notifications_for_user
 from src.app_logic.authentication import is_admin
-from src.schemas.grafana_templates_entities import GrafanaAlertLabels
+from src.schemas.grafana_entities import GrafanaAlertLabels
 
 def join_url_path(*args) -> str:
     """
@@ -79,7 +78,7 @@ def grafana_add_node_dashboard(node: Node) -> None:
     Creates dashboard for given node in Grafana.
     :param node (Node): node to add dashboard for
     """
-    temaplate = Template(node.dashboard_template.template)
+    template = Template(node.dashboard_template.template)
     dashboard_folder = get_folders_from_grafana(
         folder_names=['node_dashboards']
     )[0]
@@ -110,7 +109,7 @@ def grafana_add_alert_rule(
     user: User,
     node: Node,
     resource: Resource,
-    template: ResourceAlertTemplate,
+    notificaion: Notification,
     folder_uid: str,
     resource_amount: int,
     allocation_amount: int | None = None
@@ -120,7 +119,7 @@ def grafana_add_alert_rule(
     :param user (User): user to add alert for
     :param node (Node): node to add alert for
     :param resource (Resource): resource to add alert for
-    :param template (ResourceAlertTemplate): template for alert
+    :param notification (Notification): notification with template for alert
     :param folder_uid (str): uid of Grafana folder to add alert to
     :param resource_amount (int): amount of resource provided by the node
     :param allocation_amount (int): amount of resource allocated to the task
@@ -128,7 +127,7 @@ def grafana_add_alert_rule(
     if resource_amount is not None:
         amount = resource_amount
     else:
-        amount = template.default_amount
+        amount = notificaion.default_amount
         # Skip if default alerts are being configured.
         # This rule is used only when tasks are running.
         if amount is None:
@@ -136,7 +135,7 @@ def grafana_add_alert_rule(
     
     # TODO - add contact point for given user
 
-    config = Template(template.template).safe_substitute(
+    config = Template(notificaion.notification_template).safe_substitute(
         user_id = user.id,
         user_name = user.name,
         user_surname = user.surname,
@@ -166,7 +165,7 @@ def grafana_add_alert_rule(
         username=user.username,
         node_id=node.id,
         resource_id=resource.id,
-        template_id=template.id
+        notificaion_id=notificaion.id
     )
     config_labels = config.get('labels', {})
     config_labels |= labels.model_dump()
@@ -230,7 +229,7 @@ def get_user_notifications_by_type(
 def grafana_add_task_alert(
     task: Task,
     resource_allocation: ResourceAllocation,
-    template: ResourceAlertTemplate
+    notification: Notification
 ) -> None:
     """
     Adds Grafana user alert rule for certain resource that will be
@@ -239,9 +238,8 @@ def grafana_add_task_alert(
     :param task (Task): task to add alert for
     :param resource_allocation (ResourceAllocation): resource allocation entity
         for given resource on given node
-    :param template (ResourceAlertTemplate): template for alert
+    :param notification (Notification): notifiction with template for alert
     """
-    template = Template(template)
     user = task.User
     node = resource_allocation.node
     resource = resource_allocation.resource
@@ -266,7 +264,7 @@ def grafana_add_task_alert(
         user=user,
         node=node,
         resource=resource,
-        template=template,
+        notificaion=notification,
         folder_uid=folder['uid'],
         resource_amount=node_provides_resource.amount,
         allocation_amount=resource_allocation.amount
@@ -289,14 +287,14 @@ def grafana_add_all_task_allerts(task: Task) -> None:
     
     # add notifications for each resource on each node
     for resource_allocation in task.resource_allocations:
-        for template in resource_allocation.resource.alert_templates:
-            if template.notification not in user_notifications:
+        for notification in resource_allocation.resource.notifications:
+            if notification not in user_notifications:
                 continue
 
             grafana_add_task_alert(
                 task=task,
                 resource_allocation=resource_allocation,
-                template=template
+                notification=notification
             )
 
 # TODO - add task alert
@@ -312,8 +310,6 @@ def grafana_add_default_user_alert(
     :param user (User): user to add alert for
     :param notification (Notification): notification/alert to add
     """
-    resource = notification.template.resource
-
     folder = get_folders_from_grafana(
         folder_names=[f'{user.username}_task_alerts']
     )[0]
@@ -323,8 +319,8 @@ def grafana_add_default_user_alert(
         grafana_add_alert_rule(
             user=user,
             node=node,
-            resource=resource,
-            template=notification.template,
+            resource=notification.resource,
+            notificaion=notification,
             folder_uid=folder['uid'],
             resource_amount=node_provides_resource.amount
         )
@@ -344,7 +340,7 @@ def grafana_add_all_default_user_alerts(user: User) -> None:
     for notification in user_notifications:
         # skip if notificaion has no default amount
         # (is used only when tasks are running)
-        if notification.template.default_amount is None:
+        if notification.default_amount is None:
             continue
 
         grafana_add_default_user_alert(
@@ -450,6 +446,81 @@ def grafana_add_all_user_folders(user: User, user_grafana_id: str) -> None:
                        f"folder {created_folder['title']} in Grafana!"
             )
 
+def grafana_add_or_update_contact_point(user: User) -> None:
+    """
+    Adds or updates contact point for user.
+    :param user (User): user to add contact point for
+    """
+    contact_point = {
+        'uid': None,
+        'name': f'{user.username} contact point',
+        'type': 'email',
+        'settings': {
+            'addresses': user.email,
+            'singleEmail': False
+        },
+        'disableResolveMessage': False
+    }
+
+    # get existing contact points
+    try:
+        existing_contact_points = get_grafana_config('/api/contacts').json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get contact points from Grafana!"
+        )
+    
+    # find existing contact point
+    for cp in existing_contact_points:
+        if cp['name'] == contact_point['name']:
+            contact_point['uid'] = cp['uid']
+            break
+
+    # add or update contact point
+    if contact_point['uid'] is None:
+        path = '/api/contacts'
+    else:
+        path = f'/api/contacts/{contact_point["uid"]}'
+    try:
+        upload_grafana_config(
+            config=contact_point,
+            path=path
+        )
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to add or update contact point for user "
+                    f"{user.username} in Grafana!"
+        )
+
+def grafana_remove_user_contact_point(user: User) -> None:
+    """
+    Removes contact point for user.
+    :param user (User): user to remove contact point for
+    """
+    contact_point_name = f'{user.username} contact point'
+    try:
+        existing_contact_points = get_grafana_config('/api/contacts').json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get contact points from Grafana!"
+        )
+
+    for cp in existing_contact_points:
+        if cp['name'] == contact_point_name:
+            continue
+
+        try:
+            delete_grafana_config(f'/api/contacts/{cp["uid"]}')
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to remove contact point for user "
+                        f"{user.username} in Grafana!"
+            )
+
 def grafana_create_user(user: User) -> None:
     """
     Creates Grafana user for user.
@@ -491,7 +562,7 @@ def grafana_create_user(user: User) -> None:
             )
     
     ### Create user contact point
-    # TODO - crate contact point
+    grafana_add_or_update_contact_point(user=user)
 
     ### Create user folders
     grafana_create_user_folders(user=user, user_grafana_id=grafana_user['id'])
@@ -557,7 +628,7 @@ def grafana_remove_user(user: User) -> None:
             )
 
     ### remove user contact point
-    # TODO - remove contact point
+    grafana_remove_contact_point(user=user)
 
     ### remove user
     # get user
