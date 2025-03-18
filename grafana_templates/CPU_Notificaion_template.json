@@ -1,0 +1,83 @@
+{
+    "id": null,
+    "uid": null,
+    "orgID": 1,
+    "folderUID": "",
+    "ruleGroup": "Task limit alerts",
+    "title": "User ${user_name} CPU threshold on node ${node_name}",
+    "condition": "CPU Usage Treshold",
+    "noDataState": "NoData",
+    "execErrState": "Error",
+    "for": "5m",
+    "annotations": {
+        "summary": "User ${user_name} exceeded CPU limit on node ${node_name}! Maximum limit is ${allocation_amount}."
+    },
+    "labels": {},
+    "isPaused": false,
+    "notification_settings": {},
+    "record": null,
+    "data": [
+        {
+            "refId": "CPU Usage",
+            "queryType": "",
+            "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+            },
+            "datasourceUid": "eeffpsnni9udcd",
+            "model": {
+                "disableTextWrap": false,
+                "editorMode": "builder",
+                "expr": "sum by(group) (rate(namedprocess_namegroup_cpu_seconds_total{group=\"${node_name}\", groupname=\"${user_uid}\"}[1m]))",
+                "fullMetaSearch": false,
+                "includeNullMetadata": false,
+                "instant": true,
+                "intervalMs": 1000,
+                "legendFormat": "__auto",
+                "maxDataPoints": 43200,
+                "range": false,
+                "refId": "CPU Usage",
+                "useBackend": false
+            }
+        },
+        {
+            "refId": "CPU Usage Treshold",
+            "queryType": "",
+            "relativeTimeRange": {
+                "from": 0,
+                "to": 0
+            },
+            "datasourceUid": "__expr__",
+            "model": {
+                "conditions": [
+                    {
+                        "evaluator": {
+                            "params": [${allocation_amount}],
+                            "type": "gt"
+                        },
+                        "operator": {
+                            "type": "and"
+                        },
+                        "query": {
+                            "params": ["C"]
+                        },
+                        "reducer": {
+                            "params": [],
+                            "type": "last"
+                        },
+                        "type": "query"
+                    }
+                ],
+                "datasource": {
+                    "type": "__expr__",
+                    "uid": "__expr__"
+                },
+                "expression": "CPU Usage",
+                "intervalMs": 1000,
+                "maxDataPoints": 43200,
+                "refId": "CPU Usage Treshold",
+                "type": "threshold"
+            }
+        }
+    ]
+}

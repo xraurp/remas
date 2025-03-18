@@ -9,6 +9,7 @@ from src.db.models import (
     Notification
 )
 import httpx
+import json
 from src.config import get_settings
 from fastapi import HTTPException
 from src.app_logic.notification_operations import get_all_notifications_for_user
@@ -27,7 +28,7 @@ def upload_grafana_config(
     config: dict,
     path: str,
     method: str = 'POST'
-) -> None:
+) -> httpx.Response:
     """
     Uploads configuration to grafana instance.
     :param config (dict): configuration to upload (json)
@@ -43,8 +44,8 @@ def upload_grafana_config(
         json=config
     )
     # Raise error with response message with error has occured
-    return response
     response.raise_for_status()
+    return response
 
 def remove_grafana_config(path: str) -> None:
     """
@@ -88,7 +89,9 @@ def grafana_add_node_dashboard(node: Node) -> None:
         node_name=node.name,
         node_description=node.description
     )
+    dashboard_config = json.loads(dashboard_config)
     dashboard_config['folderUid'] = dashboard_folder['uid']
+    dashboard_config['message'] = 'Created node dashboard on node init.'
 
     # Upload config to grafana
     try:
@@ -105,17 +108,18 @@ def grafana_add_node_dashboard(node: Node) -> None:
 # TODO - remove node dashboard
 # TODO - update node dashboard
 
-def grafana_add_alert_rule(
+def grafana_add_or_update_alert_rule(
     user: User,
     node: Node,
     resource: Resource,
-    notificaion: Notification,
+    notification: Notification,
     folder_uid: str,
     resource_amount: int,
-    allocation_amount: int | None = None
+    allocation_amount: int | None = None,
+    existing_alert: dict | None = None
 ) -> None:
     """
-    Adds alert rule to Grafana.
+    Adds alert rule to Grafana or updates existing one.
     :param user (User): user to add alert for
     :param node (Node): node to add alert for
     :param resource (Resource): resource to add alert for
@@ -123,19 +127,48 @@ def grafana_add_alert_rule(
     :param folder_uid (str): uid of Grafana folder to add alert to
     :param resource_amount (int): amount of resource provided by the node
     :param allocation_amount (int): amount of resource allocated to the task
+    :param existing_alert (dict): existing alert from Grafana to update 
+        (alert can be passed in for update, so it doesn't have to be searched
+        for again)
     """
-    if resource_amount is not None:
-        amount = resource_amount
+    if allocation_amount is not None:
+        amount = allocation_amount
     else:
-        amount = notificaion.default_amount
+        amount = notification.default_amount
         # Skip if default alerts are being configured.
         # This rule is used only when tasks are running.
         if amount is None:
             return
     
-    # TODO - add contact point for given user
+    if not existing_alert:
+        # get existing user alerts from Grafana
+        try:
+            alerts = get_grafana_config(
+                '/api/v1/provisioning/alert-rules'
+            ).json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to get alerts for user {user.username} "
+                        "from Grafana!"
+            )
+        # find alert that matches the user, node, resource and notification
+        for alert in alerts:
+            al = alert.get('labels', {})
+            if al.get('username', None) != user.username:
+                continue
+            if al.get('notification_id', None) != str(notification.id):
+                continue
+            if al.get('node_id', None) != str(node.id):
+                continue
+            if al.get('resource_id', None) != str(resource.id):
+                continue
+            existing_alert = alert
+            break
 
-    config = Template(notificaion.notification_template).safe_substitute(
+    contact_point_name = f'{user.username} contact point'
+
+    config = Template(notification.notification_template).safe_substitute(
         user_id = user.id,
         user_name = user.name,
         user_surname = user.surname,
@@ -149,40 +182,64 @@ def grafana_add_alert_rule(
         resource_name = resource.name,
         resource_description = resource.description,
         resource_amount = resource_amount,
-        allocation_amount = allocation_amount
+        allocation_amount = amount
     )
-
-    # Set alert folder in Grafana
-    config['folderUID'] = folder_uid
-
-    # remove id and uid
-    config['uid'] = None
-    config['id'] = None
+    config = json.loads(config)
 
     # Set alert labels
     labels = GrafanaAlertLabels(
-        default=True if resource_amount is None else False,
+        default=True if allocation_amount is None else False,
         username=user.username,
         node_id=node.id,
         resource_id=resource.id,
-        notificaion_id=notificaion.id
+        notification_id=notification.id
     )
     config_labels = config.get('labels', {})
     config_labels |= labels.model_dump()
     config['labels'] = config_labels
 
+    # Set user contact point
+    if 'notification_settings' not in config:
+        config['notification_settings'] = {}
+    config['notification_settings']['receiver'] = contact_point_name
+
+    # Set alert folder in Grafana
+    config['folderUID'] = folder_uid
+    
+    # remove id and set uid
+    config['id'] = None
+    if existing_alert:
+        config['uid'] = existing_alert.get('uid', None)
+    else:
+        config['uid'] = None
+
     # Upload config to grafana
+    if existing_alert:
+        method = 'PUT'
+        path = f'/api/v1/provisioning/alert-rules/{config["uid"]}'
+    else:
+        method = 'POST'
+        path = '/api/v1/provisioning/alert-rules'
+    
     try:
         upload_grafana_config(
             config=config,
-            path='/api/v1/provisioning/alert-rules'
+            path=path,
+            method=method
         )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to create alert for user {user.username} in "
-                    "Grafana!"
-        )
+        if existing_alert:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to create alert for user {user.username} in "
+                        "Grafana!"
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to update alert for user {user.username} in "
+                        "Grafana!"
+            )
 
 def get_folders_from_grafana(folder_names: list[str]) -> list[dict]:
     """
@@ -260,11 +317,11 @@ def grafana_add_task_alert(
         folder_names=[f'{user.username}_task_alerts']
     )[0]
 
-    grafana_add_alert_rule(
+    grafana_add_or_update_alert_rule(
         user=user,
         node=node,
         resource=resource,
-        notificaion=notification,
+        notification=notification,
         folder_uid=folder['uid'],
         resource_amount=node_provides_resource.amount,
         allocation_amount=resource_allocation.amount
@@ -303,54 +360,92 @@ def grafana_add_all_task_allerts(task: Task) -> None:
 
 def grafana_add_default_user_alert(
     user: User,
-    notification: Notification
+    notification: Notification,
+    existing_user_alerts: list[dict]
 ) -> None:
     """
     Adds default user alert to Grafana.
     :param user (User): user to add alert for
     :param notification (Notification): notification/alert to add
+    :param existing_user_alerts (list[dict]): existing user alerts from Grafana
     """
     folder = get_folders_from_grafana(
         folder_names=[f'{user.username}_task_alerts']
     )[0]
 
-    for node_provides_resource in resource.nodes:
+    notification_alerts = list(filter(
+        lambda a: a.get('labels', {}).get('notification_id', None) == \
+            notification.id,
+        existing_user_alerts
+    ))
+
+    # add new alerts
+    for node_provides_resource in notification.resource.nodes:
         node = node_provides_resource.node
-        grafana_add_alert_rule(
-            user=user,
-            node=node,
-            resource=notification.resource,
-            notificaion=notification,
-            folder_uid=folder['uid'],
-            resource_amount=node_provides_resource.amount
-        )
+
+        existing_alert = None
+        for alert in notification_alerts:
+            if alert.get('labels', {}).get('node_id', None) == node.id and \
+               alert.get('labels', {}).get('resource_id', None) == \
+               node_provides_resource.resource.id:
+                existing_alert = alert
+                break
+
+        if not existing_alert:
+            grafana_add_or_update_alert_rule(
+                user=user,
+                node=node,
+                resource=notification.resource,
+                notification=notification,
+                folder_uid=folder['uid'],
+                resource_amount=node_provides_resource.amount,
+                existing_alert=existing_alert
+            )
 
 def grafana_add_all_default_user_alerts(user: User) -> None:
     """
     Adds all Grafana alerts for default resource usage without task.
     :param user (User): user to add alerts for
     """
-    # get default alerts / notifications
+    # get default alerts / notifications from db
     user_notifications = get_user_notifications_by_type(
         types=[NotificationType.grafana_resource_exceedance_task],
         user=user
     )
 
+    # get existing user alerts from Grafana
+    try:
+        alerts = get_grafana_config('/api/v1/provisioning/alert-rules').json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get alerts for user {user.username} "
+                    "from Grafana!"
+        )
+    user_alerts = list(filter(
+        lambda a: a.get('labels', {}).get('username', None) == user.username,
+        alerts
+    ))
+
     # add alerts to Grafana
     for notification in user_notifications:
-        # skip if notificaion has no default amount
+        # skip if notification has no default amount
         # (is used only when tasks are running)
         if notification.default_amount is None:
             continue
 
         grafana_add_default_user_alert(
             user=user,
-            notification=notification
+            notification=notification,
+            existing_user_alerts=user_alerts
         )
 
-def grafana_add_all_user_folders(user: User, user_grafana_id: str) -> None:
+def grafana_add_or_update_user_folders(
+    user: User,
+    user_grafana_id: str
+) -> None:
     """
-    Adds all Grafana folders for user.
+    Adds all Grafana folders for given user.
     :param user (User): user to add folders for
     :param user_grafana_uid (str): Grafana user ID
     """
@@ -398,20 +493,19 @@ def grafana_add_all_user_folders(user: User, user_grafana_id: str) -> None:
     
     # create missing user folders
     for folder in user_folders:
-        if folder in existing_user_folders_names:
-            continue
-
-        try:
-            upload_grafana_config(
-                config={'uid': None, 'title': folder},
-                path='/api/folders'
-            )
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to create folder for user {user.username} "
-                        "in Grafana!"
-            )
+        if folder not in existing_user_folders_names:
+            try:
+                upload_grafana_config(
+                    config={'uid': None, 'title': folder},
+                    path='/api/folders'
+                )
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to create folder for user {user.username} "
+                            "in Grafana!"
+                )
+        
         ### change user folder permissions, so user can edit the content
         created_folder = get_folders_from_grafana(
             folder_names=[folder]
@@ -428,10 +522,20 @@ def grafana_add_all_user_folders(user: User, user_grafana_id: str) -> None:
                 detail=f"Failed to get permissions for folder "
                        f"{created_folder['title']} in Grafana!"
             )
+        
+        # check if user is already set as editor
+        permissions_set = False
+        for permission in permissions:
+            if permission['userId'] == user_grafana_id \
+            and permission['permission'] == 2:
+                permissions_set = True
+                break
+        if permissions_set:
+            continue
 
         # add user to folder as editor
         permissions.append({
-            'user': user_grafana_id,
+            'userId': user_grafana_id,
             'permission': 2  # Editor
         })
         try:
@@ -464,7 +568,9 @@ def grafana_add_or_update_contact_point(user: User) -> None:
 
     # get existing contact points
     try:
-        existing_contact_points = get_grafana_config('/api/contacts').json()
+        existing_contact_points = get_grafana_config(
+            '/api/v1/provisioning/contact-points'
+        ).json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=500,
@@ -479,13 +585,16 @@ def grafana_add_or_update_contact_point(user: User) -> None:
 
     # add or update contact point
     if contact_point['uid'] is None:
-        path = '/api/contacts'
+        path = '/api/v1/provisioning/contact-points'
+        method = 'POST'
     else:
-        path = f'/api/contacts/{contact_point["uid"]}'
+        path = f'/api/v1/provisioning/contact-points/{contact_point["uid"]}'
+        method = 'PUT'
     try:
         upload_grafana_config(
             config=contact_point,
-            path=path
+            path=path,
+            method=method
         )
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -501,7 +610,9 @@ def grafana_remove_user_contact_point(user: User) -> None:
     """
     contact_point_name = f'{user.username} contact point'
     try:
-        existing_contact_points = get_grafana_config('/api/contacts').json()
+        existing_contact_points = get_grafana_config(
+            '/api/v1/provisioning/contact-points'
+        ).json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=500,
@@ -509,11 +620,13 @@ def grafana_remove_user_contact_point(user: User) -> None:
         )
 
     for cp in existing_contact_points:
-        if cp['name'] == contact_point_name:
+        if cp['name'] != contact_point_name:
             continue
 
         try:
-            delete_grafana_config(f'/api/contacts/{cp["uid"]}')
+            remove_grafana_config(
+                f'/api/v1/provisioning/contact-points/{cp["uid"]}'
+            )
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=500,
@@ -521,10 +634,16 @@ def grafana_remove_user_contact_point(user: User) -> None:
                         f"{user.username} in Grafana!"
             )
 
-def grafana_create_user(user: User) -> None:
+        break
+
+def grafana_create_or_update_user(
+    user: User,
+    password: str | None = None
+) -> None:
     """
-    Creates Grafana user for user.
+    Creates Grafana user or updates existing user.
     :param user (User): user to create Grafana user for
+    :param password (str): password for Grafana user
     """
     ### Crate user in grafana
     user_data = {
@@ -534,12 +653,45 @@ def grafana_create_user(user: User) -> None:
         'email': user.email,
         'isDisabled': False
     }
+    if password is not None:
+        user_data['password'] = password
+    
+    grafana_user_id = None
+    
+    upload_path = '/api/admin/users'
+    upload_method = 'POST'
+
+    # get user from grafana
+    try:
+        grafana_user = get_grafana_config(
+            f'/api/users/lookup?loginOrEmail={user.username}'
+        ).json()
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            grafana_user = None
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to get user {user.username} in Grafana!"
+            )
+    
+    if grafana_user is not None:
+        upload_path = f'/api/users/{grafana_user["id"]}'
+        upload_method = 'PUT'
+        grafana_user_id = grafana_user['id']
+    elif password is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error when creating user {user.username} in Grafana! "
+                    "Password is not set!"
+        )
 
     # Add user to Grafana 
     try:
         grafana_user = upload_grafana_config(
             config=user_data,
-            path='/api/admin/users'
+            path=upload_path,
+            method=upload_method
         ).json()
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -547,13 +699,19 @@ def grafana_create_user(user: User) -> None:
             detail=f"Failed to create user {user.username} in Grafana!"
         )
     
+    # Get user id when new user is created (on update, id is not returned
+    # in the response)
+    if upload_method == 'POST':
+        grafana_user_id = grafana_user['id']
+    
     # Set admin permissions in Grafana
     if is_admin(user=user):
         try:
-            grafana_user = upload_grafana_config(
+            upload_grafana_config(
                 config={'isGrafanaAdmin': True},
-                path=f"/api/admin/users/{grafana_user['id']}/permissions"
-            ).json()
+                path=f"/api/admin/users/{grafana_user_id}/permissions",
+                method='PUT'
+            )
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=500,
@@ -565,7 +723,7 @@ def grafana_create_user(user: User) -> None:
     grafana_add_or_update_contact_point(user=user)
 
     ### Create user folders
-    grafana_create_user_folders(user=user, user_grafana_id=grafana_user['id'])
+    grafana_add_or_update_user_folders(user=user, user_grafana_id=grafana_user_id)
 
     ### Create default user alerts
     grafana_add_all_default_user_alerts(user=user)
@@ -588,12 +746,12 @@ def grafana_remove_user(user: User) -> None:
     
     # remove user alerts
     for alert in alerts:
-        if alert.get('labels', {}).get('user_id', None) != user.id:
+        if alert.get('labels', {}).get('username', None) != user.username:
             continue
 
         try:
             remove_grafana_config(
-                path=f'/api/v1/provisioning/alert-rules/{alert["id"]}'
+                path=f'/api/v1/provisioning/alert-rules/{alert["uid"]}'
             )
         except httpx.HTTPStatusError as e:
             raise HTTPException(
@@ -605,15 +763,15 @@ def grafana_remove_user(user: User) -> None:
     ### remove user folders
     # get user folders
     user_folder_names = [
-        f.safe_substitute(user_name=user.username)
+        Template(f).safe_substitute(user_name=user.username)
         for f in get_settings().grafana_user_system_folder_templates
     ] + [
-        f.safe_substitute(user_name=user.username)
+        Template(f).safe_substitute(user_name=user.username)
         for f in get_settings().grafana_user_folder_templates
     ]
-    
+
     folders = get_folders_from_grafana(folder_names=user_folder_names)
-    
+
     # remove user folders
     for folder in folders:
         try:
@@ -628,7 +786,7 @@ def grafana_remove_user(user: User) -> None:
             )
 
     ### remove user contact point
-    grafana_remove_contact_point(user=user)
+    grafana_remove_user_contact_point(user=user)
 
     ### remove user
     # get user
@@ -637,10 +795,14 @@ def grafana_remove_user(user: User) -> None:
             f'/api/users/lookup?loginOrEmail={user.username}'
         ).json()
     except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get user {user.username} in Grafana!"
-        )
+        # user not in grafana
+        if e.response.status_code == 404:
+            return
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to get user {user.username} in Grafana!"
+            )
     
     # remove user
     try:
@@ -653,3 +815,11 @@ def grafana_remove_user(user: User) -> None:
             detail=f"Failed to remove user {user.username} in Grafana!"
         )
 
+
+from src.config import get_settings
+from sqlmodel import create_engine, Session
+from src.db.models import User
+session = Session(bind=create_engine(url=get_settings().database_url))
+user = session.get(User, 2)
+grafana_create_or_update_user(user=user, password='test')
+#grafana_remove_user(user=user)

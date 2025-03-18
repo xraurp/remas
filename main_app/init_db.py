@@ -21,38 +21,45 @@ from src.db.models import (
     EventType,
     Event,
     Notification,
-    #EventHasNotificaton,
     Limit,
-    NodeIsLimitedBy
+    NodeIsLimitedBy,
+    UserHasNotification,
+    GroupHasNotification,
+    NotificationType,
+    ResourcePanelTemplate,
+    NodeDashboardTemplate
 )
 from src.app_logic.authentication import get_password_hash
 import argparse
 from sqlalchemy import Engine
 from sqlmodel import Session
+import json
 
 def insert_default_data(engine: Engine) -> None:
     with Session(bind=engine) as session:
-        common_group = Group(
-            name="Common",
+        everyone_group = Group(
+            name="Everyone",
             users_share_statistics=True
         )
         admins = Group(
             name="Administrators",
             users_share_statistics=True,
-            parent=common_group
+            parent=everyone_group
         )
         users = Group(
             name="Users",
             users_share_statistics=True,
-            parent=common_group
+            parent=everyone_group
         )
-        session.add_all([common_group, admins, users])
+        session.add_all([everyone_group, admins, users])
         user = User(
             name="Admin",
             surname="Admin",
             email="admin@localhost",
             username="admin",
             password=get_password_hash("admin"),
+            uid=0,
+            group=admins
         )
         session.add(user)
         session.commit()
@@ -65,19 +72,41 @@ def insert_test_data(engine: Engine) -> None:
             surname="Test",
             email="test@localhost",
             username="test",
-            password=get_password_hash("test")
+            password=get_password_hash("test"),
+            uid=1000
+        ))
+        session.add(NodeDashboardTemplate(
+            name="Node dashboard",
+            template=json.dumps({
+                "dashboard": {
+                    "id": None,
+                    "uid": None,
+                    "title": "Node ${node_name} overview",
+                    "tags": [ "${node_name}", "${node_id}" ],
+                    "timezone": "browser",
+                    "schemaVersion": 16,
+                    "refresh": "30s"
+                },
+                "folderUid": "",
+                "message": "",
+                "overwrite": True
+            })
+        ))
+        session.commit()
+        session.add(Node(
+            name="localhost",
+            description="Test node",
+            dashboard_template_id=1
         ))
         session.add(Node(
-            name="TestNode",
-            description="Test node"
-        ))
-        session.add(Node(
-            name="TestNode2",
-            description="Test node 2"
+            name="192.168.122.84",
+            description="Test node 2",
+            dashboard_template_id=1
         ))
         session.add(Resource(
-            name="TestResource1",
-            description="Test resource 1"
+            name="CPU Cores",
+            description="Test resource 1",
+            notificaions=[session.get(Notification, 1)]
         ))
         session.add(Resource(
             name="TestResource2",
@@ -116,6 +145,16 @@ def insert_test_data(engine: Engine) -> None:
             description="Test alias 2"
         ))
         session.commit()
+        cpu_treshold_template = open("../grafana_templates/CPU_Notificaion_template.json", "r")
+        session.add(Notification(
+            name="Default user CPU threshold",
+            type=NotificationType.grafana_resource_exceedance_task,
+            default_amount=1,
+            receivers_groups=[session.get(Group, 1)],
+            resource=session.get(Resource, 1),
+            notification_template=cpu_treshold_template.read()
+        ))
+        cpu_treshold_template.close()
         session.add(ResourceHasAlias(
             resource_id=1,
             alias_id=1
