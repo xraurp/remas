@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # grafana user system folder templates
     grafana_user_system_folder_templates: list[str] = [
         '${user_name}_task_alerts',  # for task specific alerts
+        '${user_name}_general_alerts',  # for general alerts
         '${user_name}_tasks',  # for dasboards
     ]
     # grafana user folder templates
