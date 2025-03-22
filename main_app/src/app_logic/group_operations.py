@@ -7,6 +7,10 @@ from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.authentication import insufficientPermissionsException
 from sqlmodel import select, Session
 from fastapi import HTTPException
+from src.app_logic.grafana_user_operations import grafana_create_or_update_user
+from src.app_logic.auxiliary_operations import (
+    get_members_including_subgroups
+)
 
 # TODO - query notifications when receiving group
 
@@ -18,6 +22,10 @@ def create_group(
     Creates new group.
     """
     group.id = None
+    # must be assigned explicitly
+    group.members = []
+    group.notifications = []
+
     db_session.add(group)
     db_session.commit()
     db_session.refresh(group)
@@ -77,6 +85,7 @@ def delete_group(group_id: int, db_session: Session) -> None:
             status_code=404,
             detail=f"Group with id {group_id} not found!"
         )
+    users = get_members_including_subgroups(group=db_group)
     gid = 3  # User group
     if db_group.parent_id:
         gid = db_group.parent_id
@@ -85,6 +94,9 @@ def delete_group(group_id: int, db_session: Session) -> None:
     db_session.commit()
     db_session.delete(db_group)
     db_session.commit()
+    # update Grafana alerts for users and subgroups
+    for user in users:
+        grafana_create_or_update_user(user=user, db_session=db_session)
 
 def add_user_to_group(
     request: UserGroupChangeRequest,
@@ -108,6 +120,8 @@ def add_user_to_group(
     group.members.append(user)
     db_session.commit()
     db_session.refresh(group)
+    # update user in Grafana
+    grafana_create_or_update_user(user=user, db_session=db_session)
     return group
 
 def change_group_parent(
@@ -142,4 +156,11 @@ def change_group_parent(
     group.parent_id = request.parent_id
     db_session.commit()
     db_session.refresh(group)
+    # update Grafana alerts for users and subgroups
+    users = get_members_including_subgroups(group=group)
+    for user in users:
+        grafana_create_or_update_user(
+            user=user,
+            db_session=db_session
+        )
     return group

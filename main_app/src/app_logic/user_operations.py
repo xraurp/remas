@@ -5,6 +5,10 @@ from sqlmodel import select, Session
 from fastapi import HTTPException
 from src.app_logic.authentication import insufficientPermissionsException
 from src.schemas.authentication_entities import CurrentUserInfo
+from src.app_logic.grafana_user_operations import (
+    grafana_create_or_update_user,
+    grafana_remove_user
+)
 
 # TODO - query notifications when receiving user
 
@@ -23,10 +27,17 @@ def create_user(
                 status_code=404,
                 detail=f"Group with id {user.group_id} not found!"
             )
+    password = user.password
     user.password = get_password_hash(user.password)
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
+    # init user in Grafana (including password)
+    grafana_create_or_update_user(
+        user=user,
+        db_session=db_session,
+        password=password
+    )
     return user
 
 def get_user(
@@ -78,6 +89,8 @@ def update_user(
     db_user.email = user.email
     db_session.commit()
     db_session.refresh(db_user)
+    # update user in Grafana
+    grafana_create_or_update_user(user=db_user, db_session=db_session)
     return db_user
 
 def delete_user(user_id: int, db_session: Session) -> None:
@@ -95,5 +108,6 @@ def delete_user(user_id: int, db_session: Session) -> None:
             status_code=404,
             detail=f"User with id {user_id} not found!"
         )
+    grafana_remove_user(user=db_user)
     db_session.delete(db_user)
     db_session.commit()

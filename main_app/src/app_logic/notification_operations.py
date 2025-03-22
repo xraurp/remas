@@ -18,6 +18,18 @@ from src.schemas.notification_entities import (
 from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.authentication import insufficientPermissionsException
 from datetime import datetime, timedelta
+from src.app_logic.auxiliary_operations import (
+    get_all_notifications_for_user,
+    get_all_notifications_for_group
+)
+from src.app_logic.grafana_alert_operations import (
+    grafana_remove_alert_from_user,
+    grafana_remove_alert,
+    update_grafana_alert_for_all_users_and_groups,
+    grafana_remove_alert_for_group,
+    grafana_add_alert_to_user,
+    grafana_add_alert_to_group
+)
 
 def get_all_notifications(db_session: Session) -> list[Notification]:
     """
@@ -48,6 +60,17 @@ def create_notification(
     Creates new notification
     """
     notification.id = None
+    notification.receivers_groups = []
+    notification.receivers_users = []
+    if is_scheduleble_notification(notification):
+        if not notification.time_offset:
+            notification.time_offset = 0
+    elif is_grafana_alert(notification):
+        if not notification.default_amount:
+            raise HTTPException(
+                status_code=400,
+                detail="Default amount must be specified for grafana alerts!"
+            )
     if current_user.is_admin:
         notification.owner_id = None
     else:
@@ -77,8 +100,25 @@ def remove_notification(
             status_code=403,
             detail=f"Can't remove notification owned by another user!"
         )
+    
+    # check if notification is grafana alert and remove it from grafana
+    if is_grafana_alert(notification):
+        grafana_remove_alert(notification=notification)
+
     db_session.delete(notification)
     db_session.commit()
+
+def is_grafana_alert(notification: Notification) -> bool:
+    return notification.type in (
+        NotificationType.grafana_resource_exceedance_task,
+        NotificationType.grafana_resource_exceedance_general
+    )
+
+def is_scheduleble_notification(notification: Notification) -> bool:
+    return notification.type in (
+        NotificationType.task_start,
+        NotificationType.task_end
+    )
 
 def update_notification(
     notification: Notification,
@@ -101,20 +141,67 @@ def update_notification(
             detail=f"Can't update notification owned by another user!"
         )
     
+    # check if notification needs to be rescheduled
     reschedule = False
-    if notification.type != db_notification.type \
+    remove_scheudling = False
+    if is_scheduleble_notification(db_notification) \
+    and not is_scheduleble_notification(notification):
+        remove_scheudling = True
+    elif notification.type != db_notification.type \
     or notification.time_offset != db_notification.time_offset:
         reschedule = True
 
+    # check if notification resource is changed
+    remove_old_notification = False
+    if db_notification.resource_id != notification.resource_id:
+        remove_old_notification = True
+
+    # update notification
     db_notification.name = notification.name
     db_notification.description = notification.description
-    db_notification.time_offset = notification.time_offset
     db_notification.type = notification.type
-    db_notification.notification_content = notification.notification_content
+    db_notification.notification_template = notification.notification_template
+    if not is_grafana_alert(db_notification):
+        # update schedulebe notification
+        db_notification.time_offset = notification.time_offset
+    else:
+        # update grafana alert
+        db_notification.default_amount = notification.default_amount
+        db_notification.resource_id = notification.resource_id
+        if not db_notification.default_amount:
+            raise HTTPException(
+                status_code=400,
+                detail="Default amount is required for grafana alerts!"
+            )
+        if not db_notification.resource_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Resource must be set for grafana alerts!"
+            )
+        if not db_notification.notification_template:
+            raise HTTPException(
+                status_code=400,
+                detail="Notification template must be set for grafana alerts!"
+            )
     db_session.commit()
     db_session.refresh(db_notification)
+    # check if notification is grafana alert and update it in grafana
+    if is_grafana_alert(db_notification):
+        if remove_old_notification:
+            grafana_remove_alert(notification=db_notification)
+        update_grafana_alert_for_all_users_and_groups(
+            notification=db_notification,
+            db_session=db_session
+        )
     # reschedule notification after update
-    if reschedule:
+    if remove_scheudling:
+        remove_notification_scheduling_for_all(
+            notification=db_notification,
+            db_session=db_session
+        )
+        db_session.commit()
+        db_session.refresh(db_notification)
+    elif reschedule:
         reschedule_notification_events_for_all(
             notification=db_notification,
             db_session=db_session
@@ -198,6 +285,12 @@ def assign_or_unassign_notification(
     
     if unassign:  # remove notification assignment
         if user and user in db_notification.receivers_users:
+            if is_grafana_alert(db_notification):
+                grafana_remove_alert_from_user(
+                    user=user,
+                    notification=db_notification,
+                    db_session=db_session
+                )
             db_notification.receivers_users.remove(user)
             db_session.commit()
             remove_notification_scheduling_for_user(
@@ -206,6 +299,12 @@ def assign_or_unassign_notification(
                 db_session=db_session
             )
         if group and group in db_notification.receivers_groups:
+            if is_grafana_alert(db_notification):
+                grafana_remove_alert_for_group(
+                    group=group,
+                    notification=db_notification,
+                    db_session=db_session
+                )
             db_notification.receivers_groups.remove(group)
             db_session.commit()
             remove_notification_scheduling_for_group(
@@ -222,14 +321,26 @@ def assign_or_unassign_notification(
                 user=user,
                 db_session=db_session
             )
+            if is_grafana_alert(db_notification):
+                grafana_add_alert_to_user(
+                    user=user,
+                    notification=db_notification,
+                    db_session=db_session
+                )
         if group and group not in db_notification.receivers_groups:
             db_notification.receivers_groups.append(group)
             db_session.commit()
-            schedule_notitifation_events_for_group(
+            schedule_notification_events_for_group(
                 notification=db_notification,
                 group=group,
                 db_session=db_session
             )
+            if is_grafana_alert(db_notification):
+                grafana_add_alert_to_group(
+                    group=group,
+                    notification=db_notification,
+                    db_session=db_session
+                )
     
     db_session.commit()
     db_session.refresh(db_notification)
@@ -245,8 +356,7 @@ def schedule_notification_events_for_task(
     Commit changes in database.
     """
     # check if notification needs to be scheduled
-    if notification.type \
-    not in (NotificationType.task_start, NotificationType.task_end):
+    if not is_scheduleble_notification(notification):
         return
 
     # check if notification is scheduled already
@@ -297,8 +407,7 @@ def schedule_notification_events_for_user(
     Schedule notification events for user.
     """
     # check if notification needs to be scheduled
-    if notification.type \
-    not in (NotificationType.task_start, NotificationType.task_end):
+    if not is_scheduleble_notification(notification):
         return
 
     for task in user.tasks:
@@ -317,8 +426,7 @@ def schedule_notification_events_for_group(
     Schedule notification events for group.
     """
     # check if notification needs to be scheduled
-    if notification.type \
-    not in (NotificationType.task_start, NotificationType.task_end):
+    if not is_scheduleble_notification(notification):
         return
     
     for user in group.members:
@@ -343,8 +451,7 @@ def reschedule_notification_events_for_all(
     Reschedules notification events for all groups and users.
     """
     # check if notification needs to be scheduled
-    if notification.type \
-    not in (NotificationType.task_start, NotificationType.task_end):
+    if not is_scheduleble_notification(notification):
         return
     
     for user in notification.receivers_users:
@@ -430,36 +537,6 @@ def remove_notification_scheduling_for_all(
             group=group,
             db_session=db_session
         )
-
-def get_all_notifications_for_group(group: Group) -> list[GroupNotifications]:
-    """
-    Returns all notifications for group and parent groups.
-    """
-    notifications = [
-        GroupNotifications(
-            group_id=group.id,
-            group_name=group.name,
-            notifications=group.notifications
-        )
-    ]
-    if group.parent:
-        notifications += get_all_notifications_for_group(group=group.parent)
-    return notifications
-
-def get_all_notifications_for_user(user: User) -> list[GroupNotifications]:
-    """
-    Returns all notifications for user and his groups. Notifications asigned
-    directly to user are returned without group information.
-    """
-    notifications = [
-        GroupNotifications(
-            group_id=None,
-            group_name=None,
-            notifications=user.notifications
-        )
-    ]
-    notifications += get_all_notifications_for_group(group=user.group)
-    return notifications
 
 def get_notifications_by_group_id(
     group_id: int,

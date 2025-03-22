@@ -2,6 +2,8 @@ from src.db.models  import Resource, ResourceAlias
 from sqlmodel import select, Session
 from src.schemas.resource_entities import AliasRequest
 from fastapi import HTTPException
+from src.app_logic.grafana_alert_operations import grafana_remove_alert
+
 
 def create_resource(
     resource: Resource,
@@ -11,6 +13,9 @@ def create_resource(
     Creates new resource
     """
     resource.id = None
+    resource.nodes = []
+    resource.notifications = []
+
     db_session.add(resource)
     db_session.commit()
     db_session.refresh(resource)
@@ -29,6 +34,9 @@ def delete_resource(resource_id: int, db_session: Session) -> None:
     for alias in resource.aliases:
         if len(alias.resources) == 1:
             db_session.delete(alias)
+    # remove Grafana alerts
+    for notification in resource.notifications:
+        grafana_remove_alert(notification=notification)
     db_session.delete(resource)
     db_session.commit()
 
@@ -108,6 +116,12 @@ def remove_resource_alias(
         raise HTTPException(
             status_code=404,
             detail=f"Alias with id {alias_request.alias_id} not found!"
+        )
+    if alias not in resource.aliases:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Resource with id {alias_request.resource_id} doesn't have "
+                   f"alias with id {alias_request.alias_id}!"
         )
     alias.resources.remove(resource)
     db_session.commit()
