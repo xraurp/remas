@@ -84,7 +84,7 @@ def group_delete(
     delete_group(group_id=group_id, db_session=session)
     return {'detail': 'Group deleted'}
 
-@group_route.post("/add-user", response_model=GroupResponse)
+@group_route.post("/add_user", response_model=GroupResponse)
 def group_add_user(
     request: UserGroupChangeRequest,
     current_user: LoginDep,
@@ -99,7 +99,7 @@ def group_add_user(
         db_session=session
     )
 
-@group_route.post("/change-parent", response_model=GroupResponse)
+@group_route.post("/change_parent", response_model=GroupResponse)
 def group_change_parent(
     request: GroupChangeParentRequest,
     current_user: LoginDep,
