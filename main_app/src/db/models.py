@@ -4,6 +4,7 @@ from sqlmodel import (
     SQLModel,
     Relationship
 )
+from sqlalchemy.types import BigInteger
 import enum
 from datetime import datetime
 
@@ -132,15 +133,6 @@ class Node(SQLModel, table=True):
         link_model=NodeIsLimitedBy
     )
 
-    dashboard_template_id: int = Field(
-        default=None,
-        foreign_key="nodedashboardtemplate.id",
-        ondelete="RESTRICT"
-    )
-    dashboard_template: "NodeDashboardTemplate" = Relationship(
-        back_populates="node"
-    )
-
 class ResourceHasAlias(SQLModel, table=True):
     """
     Connection table between resource and alias.
@@ -216,7 +208,7 @@ class NodeProvidesResource(SQLModel, table=True):
         primary_key=True,
         ondelete="CASCADE"
     )
-    amount: int
+    amount: int = Field(sa_type=BigInteger)
 
     node: Node = Relationship(back_populates="resources")
     resource: Resource = Relationship(back_populates="nodes")
@@ -244,7 +236,7 @@ class ResourceAllocation(SQLModel, table=True):
         primary_key=True,
         ondelete="CASCADE"
     )
-    amount: int
+    amount: int = Field(sa_type=BigInteger)
 
     task: "Task" = Relationship(back_populates="resource_allocations")
     node: Node = Relationship(back_populates="resource_allocations")
@@ -322,25 +314,6 @@ class EventType(enum.Enum):
     task_end = "task_end"
     other = "other"
 
-'''
-class EventHasNotificaton(SQLModel, table=True):
-    """
-    Connection table between event and notification.
-    """
-    event_id: int = Field(
-        default=None,
-        foreign_key="event.id",
-        primary_key=True,
-        ondelete="CASCADE"
-    )
-    notification_id: int = Field(
-        default=None,
-        foreign_key="notification.id",
-        primary_key=True,
-        ondelete="CASCADE"
-    )
-'''
-
 class Event(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
@@ -387,7 +360,7 @@ class Notification(SQLModel, table=True):
     type: NotificationType = Field(default=NotificationType.other)
     # Used for Grafana alerts - contains default amount of resource that user
     # can use without creating task.
-    default_amount: int | None = None
+    default_amount: int | None = Field(default=None, sa_type=BigInteger)
 
     # User that created the notification
     owner_id: int | None = Field(
@@ -422,7 +395,7 @@ class Limit(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str
     description: str | None = None
-    amount: int
+    amount: int = Field(sa_type=BigInteger)
 
     # Either user or group must be set
     user_id: int | None = Field(
@@ -462,12 +435,3 @@ class ResourcePanelTemplate(SQLModel, table=True):
         ondelete="CASCADE"
     )
     resource: Resource = Relationship(back_populates="panel_templates")
-
-class NodeDashboardTemplate(SQLModel, table=True):
-    """
-    Template for Grafana dashboards for given Node.
-    """
-    id: int = Field(default=None, primary_key=True)
-    template: str
-
-    nodes: list[Node] = Relationship(back_populates="dashboard_template")
