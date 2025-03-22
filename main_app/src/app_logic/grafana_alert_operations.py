@@ -23,12 +23,10 @@ from src.app_logic.grafana_general_operations import (
     get_grafana_config,
     get_folders_from_grafana
 )
-from src.app_logic.notification_operations_auxiliary import (
-    get_user_notifications_by_type
+from src.app_logic.auxiliary_operations import (
+    get_user_notifications_by_type,
+    get_members_including_subgroups
 )
-from src.app_logic.resource_operations import get_resource
-from src.app_logic.node_operations import get_node
-from src.app_logic.group_operations import get_members_including_subgroups
 
 def grafana_add_or_update_alert_rule(
     user: User,
@@ -370,13 +368,20 @@ def grafana_remove_all_user_alerts(user: User) -> None:
 
 def grafana_add_alert_to_user(
     user: User,
-    notification: Notification
+    notification: Notification,
+    db_session: Session
 ) -> None:
     """
     Adds alert to user in Grafana. Userful when new alert is assigned to user.
     :param user (User): user to add alert for
     :param notification (Notification): notification/alert to add
+    :param db_session (Session): database session to use
     """
+    # check if notification is assigned to a resource
+    resource = notification.resource
+    if not resource:
+        return
+    
     # get curently required resources for user tasks
     if notification.type == NotificationType.grafana_resource_exceedance_task:
         required_resources = get_current_required_resources(
@@ -402,8 +407,7 @@ def grafana_add_alert_to_user(
         folder = get_folders_from_grafana(
             folder_names=[f'{user.username}_general_alerts']
         )[0]
-
-    resource = notification.resource
+    
     for node_provides_resource in resource.nodes:
         node = node_provides_resource.node
 
@@ -469,24 +473,26 @@ def grafana_remove_alert_from_user(
             )
 
 def update_grafana_alert_for_all_users_and_groups(
-    notification: Notification
+    notification: Notification,
+    db_session: Session
 ) -> None:
     """
     Updates grafana alert based on notification.
     :param notification (Notification): notification with template to update
+    :param db_session (Session): database session to use
     """
     # get all users affected by notification
     users = notification.receivers_users
     for group in notification.receivers_groups:
-        users.extend(get_members_including_subgroups(group=group))
-    
-    # deduplicate users
-    users = list(set(users))
+        for user in get_members_including_subgroups(group=group):
+            if user not in users:
+                users.append(user)
     
     for user in users:
         grafana_add_alert_to_user(
             notification=notification,
-            user=user
+            user=user,
+            db_session=db_session
         )
 
 def grafana_remove_alert_for_group(
@@ -500,10 +506,7 @@ def grafana_remove_alert_for_group(
     :param notification (Notification): notification/alert to remove
     :param db_session (Session): database session to use
     """
-    afected_users = get_members_including_subgroups(
-        group=group,
-        db_session=db_session
-    )
+    afected_users = get_members_including_subgroups(group=group)
     
     for user in afected_users:
         grafana_remove_alert_from_user(
@@ -523,15 +526,13 @@ def grafana_add_alert_to_group(
     :param notification (Notification): notification/alert to add
     :param db_session (Session): database session to use
     """
-    afected_users = get_members_including_subgroups(
-        group=group,
-        db_session=db_session
-    )
+    afected_users = get_members_including_subgroups(group=group)
     
     for user in afected_users:
         grafana_add_alert_to_user(
             user=user,
-            notification=notification
+            notification=notification,
+            db_session=db_session
         )
 
 def grafana_update_user_alerts_on_task_event(
@@ -561,8 +562,8 @@ def grafana_update_user_alerts_on_task_event(
     )[0]
 
     # get resources, nodes and notifications from database
-    resources = db_session.query(Resource).all()
-    nodes = db_session.query(Node).all()
+    resources = db_session.scalars(select(Resource)).all()
+    nodes = db_session.scalars(select(Node)).all()
     notifications = get_user_notifications_by_type(
         types=[NotificationType.grafana_resource_exceedance_task],
         user=user
@@ -613,8 +614,7 @@ def grafana_remove_alert(
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get alerts for user {user.username} "
-                    "from Grafana!"
+            detail=f"Failed to get alerts from Grafana!"
         )
     alert_instances = list(filter(
         lambda a: a.get('labels', {}).get('notification_id', None) == \
@@ -631,6 +631,43 @@ def grafana_remove_alert(
         except httpx.HTTPStatusError as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to remove alert for user {user.username} "
-                        "in Grafana!"
+                detail=f"Failed to remove alert {notification.name} "
+                        "from Grafana!"
+            )
+
+def grafana_remove_alert_for_node(
+    node: Node,
+    notification: Notification
+) -> None:
+    """
+    Removes alert for node.
+    :param node (Node): node to remove alert for
+    :param notification (Notification): notification/alert to remove
+    """
+    # get existing alerts
+    try:
+        alerts = get_grafana_config('/api/v1/provisioning/alert-rules').json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get alerts from Grafana!"
+        )
+    alert_instances = list(filter(
+        lambda a: a.get('labels', {}).get('notification_id', None) == \
+            str(notification.id) and \
+            a.get('labels', {}).get('node_id', None) == str(node.id),
+        alerts
+    ))
+
+    # remove alert instances
+    for alert in alert_instances:
+        try:
+            remove_grafana_config(
+                path=f'/api/v1/provisioning/alert-rules/{alert["uid"]}'
+            )
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to remove alert {notification.name} "
+                        "from Grafana!"
             )

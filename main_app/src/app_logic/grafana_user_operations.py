@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from string import Template
 from sqlalchemy.orm import Session
 import httpx
-from src.app_logic.authentication import is_admin
+from src.app_logic.auxiliary_operations import is_admin
 from src.config import get_settings
 from src.app_logic.grafana_general_operations import (
     upload_grafana_config,
@@ -371,11 +371,43 @@ def grafana_remove_user(user: User) -> None:
             detail=f"Failed to remove user {user.username} in Grafana!"
         )
 
+def grafana_change_user_password(user: User, password: str) -> None:
+    """
+    Changes Grafana password for user.
+    :param user (User): user to change Grafana password for
+    :param password (str): new password
+    """
+    # get user
+    try:
+        grafana_user = get_grafana_config(
+            f'/api/users/lookup?loginOrEmail={user.username}'
+        ).json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get user {user.username} in Grafana!"
+        )
+
+    # change password
+    try:
+        upload_grafana_config(
+            config={'password': password},
+            path=f'/api/admin/users/{grafana_user["id"]}/password',
+            method='PUT'
+        )
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to change password for user {user.username} "
+                    "in Grafana!"
+        )
+
+
 # TODO - remove
-from src.config import get_settings
-from sqlmodel import create_engine, Session
-from src.db.models import User
-session = Session(bind=create_engine(url=get_settings().database_url))
-user = session.get(User, 2)
+#from src.config import get_settings
+#from sqlmodel import create_engine, Session
+#from src.db.models import User
+#session = Session(bind=create_engine(url=get_settings().database_url))
+#user = session.get(User, 2)
 #grafana_create_or_update_user(user=user, password='test', db_session=session)
-grafana_remove_user(user=user)
+#grafana_remove_user(user=user)

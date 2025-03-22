@@ -5,6 +5,10 @@ from src.schemas.node_entities import (
     NodeResponse,
     NodeResourceResponse
 )
+from src.app_logic.grafana_alert_operations import (
+    update_grafana_alert_for_all_users_and_groups,
+    grafana_remove_alert_for_node
+)
 from fastapi import HTTPException
 
 # TODO - query resources when receiving node
@@ -37,9 +41,12 @@ def create_node(
     Creates new node
     """
     node.id = None
+    node.resources = []
+
     db_session.add(node)
     db_session.commit()
     db_session.refresh(node)
+    # TODO - add node dashboard to Grafana
     return generate_node_response(node=node)
 
 def delete_node(node_id: int, db_session: Session) -> None:
@@ -52,6 +59,15 @@ def delete_node(node_id: int, db_session: Session) -> None:
             status_code=404,
             detail=f"Node with id {node_id} not found!"
         )
+    # remove all Grafana alerts for node
+    for npr in node.resources:
+        resource = npr.resource
+        for notification in resource.notifications:
+            grafana_remove_alert_for_node(
+                node=node,
+                notification=notification
+            )
+    # TODO - remove node dashboard from Grafana
     db_session.delete(node)
     db_session.commit()
 
@@ -61,7 +77,6 @@ def get_node(node_id: int, db_session: Session) -> NodeResponse:
     """
     result = db_session.scalars(select(Node).where(Node.id == node_id)).one()
     return generate_node_response(node=result)
-
 
 def get_all_nodes(db_session: Session) -> list[NodeResponse]:
     """
@@ -82,6 +97,7 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
         )
     db_node.name = node.name
     db_node.description = node.description
+    # TODO - update node dashboard in Grafana
     db_session.commit()
     db_session.refresh(db_node)
     return generate_node_response(node=db_node)
@@ -112,6 +128,13 @@ def add_resource_to_node(
     ))
     db_session.commit()
     db_session.refresh(node)
+    # add Grafana alerts for node
+    for notification in resource.notifications:
+        update_grafana_alert_for_all_users_and_groups(
+            notification=notification,
+            db_session=db_session
+        )
+    # TODO - add resource panels to node dashboard
     return generate_node_response(node=node)
 
 def remove_resource_from_node(
@@ -133,11 +156,24 @@ def remove_resource_from_node(
             status_code=404,
             detail=f"Resource with id {request.resource_id} not found!"
         )
-    node.resources.remove(NodeProvidesResource(
-        node_id=request.node_id,
-        resource_id=request.resource_id,
-        amount=request.amount
-    ))
+    npr = db_session.get(
+        NodeProvidesResource,
+        (request.node_id, request.resource_id)
+    )
+    if not npr:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Node with id {request.node_id} doesn't have "
+                   f"resource with id {request.resource_id}!"
+        )
+    db_session.delete(npr)
     db_session.commit()
     db_session.refresh(node)
+    # remove Grafana alerts for node
+    for notification in resource.notifications:
+        grafana_remove_alert_for_node(
+            node=node,
+            notification=notification
+        )
+    # TODO - remove resource panels to node dashboard
     return generate_node_response(node=node)
