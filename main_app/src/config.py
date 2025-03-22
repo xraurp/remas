@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     )
     grafana_username: str = os.environ.get('GRAFANA_USERNAME', 'admin')
     grafana_password: str = os.environ.get('GRAFANA_PASSWORD', 'admin')
+    # TODO - add grafana email configuration
 
     # grafana user system folder templates
     grafana_user_system_folder_templates: list[str] = [
