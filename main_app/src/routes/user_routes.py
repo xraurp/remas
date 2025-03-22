@@ -18,7 +18,7 @@ user_route = APIRouter(
     prefix="/user"
 )
 
-@user_route.get("/", response_model=list[UserNoPassword])
+@user_route.get("", response_model=list[UserNoPassword])
 def get_users(
     current_user: LoginDep,
     session: SessionDep
@@ -44,7 +44,7 @@ def user_get(
         db_session=session
     )
 
-@user_route.post("/", response_model=UserNoPassword, status_code=201)
+@user_route.post("", response_model=UserNoPassword, status_code=201)
 def user_create(
     user: User,
     current_user: LoginDep,
@@ -56,7 +56,7 @@ def user_create(
     ensure_admin_permissions(current_user=current_user)
     return create_user(user=user, db_session=session)
 
-@user_route.put("/", response_model=UserNoPassword)
+@user_route.put("", response_model=UserNoPassword)
 def user_update(
     user: UpdateUserRequest,
     current_user: LoginDep,

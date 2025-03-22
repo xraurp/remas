@@ -21,7 +21,7 @@ group_route = APIRouter(
     prefix="/group"
 )
 
-@group_route.get("/", response_model=list[GroupResponse])
+@group_route.get("", response_model=list[GroupResponse])
 def get_groups(
     session: SessionDep,
     current_user: LoginDep
@@ -47,7 +47,7 @@ def group_get(
         db_session=session
     )
 
-@group_route.post("/", response_model=GroupResponse, status_code=201)
+@group_route.post("", response_model=GroupResponse, status_code=201)
 def group_create(
     group: Group,
     current_user: LoginDep,
@@ -59,7 +59,7 @@ def group_create(
     ensure_admin_permissions(current_user=current_user)
     return create_group(group=group, db_session=session)
 
-@group_route.put("/", response_model=GroupResponse)
+@group_route.put("", response_model=GroupResponse)
 def group_update(
     group: Group,
     current_user: LoginDep,

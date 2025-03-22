@@ -22,7 +22,7 @@ task_route = APIRouter(
 )
 
 
-@task_route.get("/", response_model=list[TaskResponseSimple])
+@task_route.get("", response_model=list[TaskResponseSimple])
 def get_tasks(
     current_user: LoginDep,
     session: SessionDep
@@ -63,7 +63,7 @@ def task_get(
         db_session=session
     )
 
-@task_route.post("/", response_model=TaskResponseFull)
+@task_route.post("", response_model=TaskResponseFull)
 def task_create(
     task: CreateTaskRequest,
     current_user: LoginDep,

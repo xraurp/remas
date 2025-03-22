@@ -17,7 +17,7 @@ task_tag_route = APIRouter(
     prefix="/task_tag"
 )
 
-@task_tag_route.get("/", response_model=list[TaskTagResponse])
+@task_tag_route.get("", response_model=list[TaskTagResponse])
 def get_all_task_tags(
     current_user: LoginDep,
     session: SessionDep
@@ -73,7 +73,7 @@ def task_tag_get(
         db_session=session
     )
 
-@task_tag_route.post("/", response_model=TaskTagResponse)
+@task_tag_route.post("", response_model=TaskTagResponse)
 def task_tag_create(
     task_tag: TaskTag,
     current_user: LoginDep,
@@ -88,7 +88,7 @@ def task_tag_create(
         db_session=session
     )
 
-@task_tag_route.put("/", response_model=TaskTagResponse)
+@task_tag_route.put("", response_model=TaskTagResponse)
 def task_tag_update(
     task_tag: TaskTag,
     current_user: LoginDep,

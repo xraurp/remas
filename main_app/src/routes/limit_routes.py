@@ -87,7 +87,7 @@ def limit_get(
     return get_limit(limit_id=limit_id, session=session)
 
 
-@limit_route.post("/", response_model=LimitResponse)
+@limit_route.post("", response_model=LimitResponse)
 def limit_create(
     limit: LimitRequest,
     current_user: LoginDep,
@@ -100,7 +100,7 @@ def limit_create(
     return add_limit(limit=limit, session=session)
 
 
-@limit_route.put("/", response_model=LimitResponse)
+@limit_route.put("", response_model=LimitResponse)
 def limit_update(
     limit: LimitRequest,
     current_user: LoginDep,

@@ -22,7 +22,7 @@ notification_route = APIRouter(
 )
 
 
-@notification_route.get("/", response_model=list[Notification])
+@notification_route.get("", response_model=list[Notification])
 def notification_get_all(
     current_user: LoginDep,
     db_session: SessionDep
@@ -49,7 +49,7 @@ def notification_get(
         db_session=db_session
     )
 
-@notification_route.post("/", response_model=Notification)
+@notification_route.post("", response_model=Notification)
 def notification_create(
     notification: Notification,
     current_user: LoginDep,
@@ -80,7 +80,7 @@ def notification_delete(
     )
     return {'detail': 'Notification deleted'}
 
-@notification_route.put("/", response_model=Notification)
+@notification_route.put("", response_model=Notification)
 def notification_update(
     notification: Notification,
     current_user: LoginDep,

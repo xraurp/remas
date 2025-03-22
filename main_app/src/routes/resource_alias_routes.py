@@ -17,7 +17,7 @@ resource_alias_route = APIRouter(
 )
 
 
-@resource_alias_route.get("/", response_model=list[AliasResponse])
+@resource_alias_route.get("", response_model=list[AliasResponse])
 def get_resource_aliases(
     current_user: LoginDep,  # ensure user is logged in
     session: SessionDep
@@ -38,7 +38,7 @@ def resource_alias_get(
     """
     return get_resource_alias(resource_alias_id=alias_id, db_session=session)
 
-@resource_alias_route.post("/", response_model=AliasResponse)
+@resource_alias_route.post("", response_model=AliasResponse)
 def resource_alias_create(
     alias: ResourceAlias,
     current_user: LoginDep,
@@ -50,7 +50,7 @@ def resource_alias_create(
     ensure_admin_permissions(current_user=current_user)
     return create_resource_alias(resource_alias=alias, db_session=session)
 
-@resource_alias_route.put("/", response_model=AliasResponse)
+@resource_alias_route.put("", response_model=AliasResponse)
 def resource_alias_update(
     alias: ResourceAlias,
     current_user: LoginDep,

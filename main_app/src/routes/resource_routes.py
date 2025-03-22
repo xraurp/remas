@@ -18,7 +18,7 @@ resource_route = APIRouter(
 )
 
 
-@resource_route.get("/", response_model=list[ResourceResponse])
+@resource_route.get("", response_model=list[ResourceResponse])
 def get_resources(
     current_user: LoginDep,  # ensure user is logged in
     session: SessionDep
@@ -39,7 +39,7 @@ def resource_get(
     """
     return get_resource(resource_id=resource_id, db_session=session)
 
-@resource_route.post("/", response_model=ResourceResponse)
+@resource_route.post("", response_model=ResourceResponse)
 def resource_create(
     resource: Resource,
     current_user: LoginDep,
@@ -51,7 +51,7 @@ def resource_create(
     ensure_admin_permissions(current_user=current_user)
     return create_resource(resource=resource, db_session=session)
 
-@resource_route.put("/", response_model=ResourceResponse)
+@resource_route.put("", response_model=ResourceResponse)
 def resource_update(
     resource: Resource,
     current_user: LoginDep,

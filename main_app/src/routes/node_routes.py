@@ -17,7 +17,7 @@ node_route = APIRouter(
     prefix="/node"
 )
 
-@node_route.get("/", response_model=list[NodeResponse])
+@node_route.get("", response_model=list[NodeResponse])
 def get_nodes(
     current_user: LoginDep,  # ensure user is logged in
     session: SessionDep
@@ -38,7 +38,7 @@ def node_get(
     """
     return get_node(node_id=node_id, db_session=session)
 
-@node_route.post("/", response_model=NodeResponse)
+@node_route.post("", response_model=NodeResponse)
 def node_create(
     node: Node,
     current_user: LoginDep,
@@ -50,7 +50,7 @@ def node_create(
     ensure_admin_permissions(current_user=current_user)
     return create_node(node=node, db_session=session)
 
-@node_route.put("/", response_model=NodeResponse)
+@node_route.put("", response_model=NodeResponse)
 def node_update(
     node: Node,
     current_user: LoginDep,
