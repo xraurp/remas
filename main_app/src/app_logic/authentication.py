@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import bcrypt
 import logging
+from src.app_logic.grafana_user_operations import grafana_create_or_update_user
+from src.app_logic.auxiliary_operations import is_admin
 
 
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="token")
@@ -71,23 +73,6 @@ def authenticate_user(
     if not verify_password(password, user.password):
         raise error
     return user
-
-def is_admin(user: User) -> bool:
-    """
-    Checks if user is admin.
-    User is admin when member of group with id == 2 or group that inherites
-    from group with id == 2.
-    :param user (User): User database entity queried from active database
-                        session.
-    :return (bool): True if user is admin, False otherwise
-    """
-    group = user.group
-    while group:
-        if group.id == 2:
-            return True
-        group = group.parent
-
-    return False
 
 def create_token(token_data: dict) -> str:
     """
@@ -185,6 +170,7 @@ def change_user_password(
             status_code=400,
             detail="Password must be at least 8 characters long!"
         )
+    grafana_change_user_password(user=user, password=request.new_password)
     user.password = get_password_hash(password=request.new_password)
     db_session.commit()
 
@@ -204,6 +190,7 @@ def set_user_password(
             status_code=404,
             detail=f"User with id {user_id} not found!"
         )
+    grafana_change_user_password(user=user, password=request.new_password)
     user.password = get_password_hash(request.new_password)
     db_session.commit()
 
