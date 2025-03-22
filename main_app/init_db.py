@@ -26,8 +26,7 @@ from src.db.models import (
     UserHasNotification,
     GroupHasNotification,
     NotificationType,
-    ResourcePanelTemplate,
-    NodeDashboardTemplate
+    ResourcePanelTemplate
 )
 from src.app_logic.authentication import get_password_hash
 import argparse
