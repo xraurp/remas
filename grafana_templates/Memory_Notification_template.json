@@ -4,21 +4,21 @@
     "orgID": 1,
     "folderUID": "",
     "ruleGroup": "Task limit alerts",
-    "title": "User ${user_name} CPU threshold on node ${node_name}",
-    "condition": "CPU Usage Treshold",
+    "title": "User ${user_name} Memory threshold on node ${node_name}",
+    "condition": "Memory treshold",
     "noDataState": "NoData",
     "execErrState": "Error",
     "for": "5m",
     "annotations": {
-        "summary": "User ${user_name} exceeded CPU limit on node ${node_name}! Maximum limit is ${allocation_amount}."
+        "description": "Checks memory usage for user ${user_name} on ${node_name}.",
+        "summary": "User ${user_name} exceeded Memory limit on node ${node_name}! Maximum limit is ${allocation_amount}."
     },
-    "labels": {},
     "isPaused": false,
     "notification_settings": {},
     "record": null,
     "data": [
         {
-            "refId": "CPU Usage",
+            "refId": "Memory usage",
             "queryType": "",
             "relativeTimeRange": {
                 "from": 600,
@@ -26,22 +26,18 @@
             },
             "datasourceUid": "eeffpsnni9udcd",
             "model": {
-                "disableTextWrap": false,
                 "editorMode": "builder",
-                "expr": "sum by(group) (rate(namedprocess_namegroup_cpu_seconds_total{group=\"${node_name}\", groupname=\"${user_uid}\"}[1m]))",
-                "fullMetaSearch": false,
-                "includeNullMetadata": false,
+                "expr": "sum by(group) (namedprocess_namegroup_memory_bytes{group=\"${node_name}\", groupname=\"${user_uid}\", memtype=~\"resident|swapped\"})",
                 "instant": true,
                 "intervalMs": 1000,
                 "legendFormat": "__auto",
                 "maxDataPoints": 43200,
                 "range": false,
-                "refId": "CPU Usage",
-                "useBackend": false
+                "refId": "Memory usage"
             }
         },
         {
-            "refId": "CPU Usage Treshold",
+            "refId": "Memory treshold",
             "queryType": "",
             "relativeTimeRange": {
                 "from": 0,
@@ -72,10 +68,10 @@
                     "type": "__expr__",
                     "uid": "__expr__"
                 },
-                "expression": "CPU Usage",
+                "expression": "Memory usage",
                 "intervalMs": 1000,
                 "maxDataPoints": 43200,
-                "refId": "CPU Usage Treshold",
+                "refId": "Memory treshold",
                 "type": "threshold"
             }
         }

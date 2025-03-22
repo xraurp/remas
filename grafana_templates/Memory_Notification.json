@@ -1,24 +1,14 @@
 {
-    "id": null,
-    "uid": null,
+    "id": 35,
+    "uid": "begj19ofcrchsf",
     "orgID": 1,
-    "folderUID": "",
+    "folderUID": "eefgmjzlz4cn4d",
     "ruleGroup": "Task limit alerts",
-    "title": "User ${user_name} CPU threshold on node ${node_name}",
-    "condition": "CPU Usage Treshold",
-    "noDataState": "NoData",
-    "execErrState": "Error",
-    "for": "5m",
-    "annotations": {
-        "summary": "User ${user_name} exceeded CPU limit on node ${node_name}! Maximum limit is ${allocation_amount}."
-    },
-    "labels": {},
-    "isPaused": false,
-    "notification_settings": {},
-    "record": null,
+    "title": "Default user Memory treshold for localhost",
+    "condition": "Memory treshold",
     "data": [
         {
-            "refId": "CPU Usage",
+            "refId": "Memory usage",
             "queryType": "",
             "relativeTimeRange": {
                 "from": 600,
@@ -26,22 +16,18 @@
             },
             "datasourceUid": "eeffpsnni9udcd",
             "model": {
-                "disableTextWrap": false,
                 "editorMode": "builder",
-                "expr": "sum by(group) (rate(namedprocess_namegroup_cpu_seconds_total{group=\"${node_name}\", groupname=\"${user_uid}\"}[1m]))",
-                "fullMetaSearch": false,
-                "includeNullMetadata": false,
+                "expr": "sum by(group) (namedprocess_namegroup_memory_bytes{group=\"localhost\", groupname=\"1000\", memtype=~\"resident|swapped\"})",
                 "instant": true,
                 "intervalMs": 1000,
                 "legendFormat": "__auto",
                 "maxDataPoints": 43200,
                 "range": false,
-                "refId": "CPU Usage",
-                "useBackend": false
+                "refId": "Memory usage"
             }
         },
         {
-            "refId": "CPU Usage Treshold",
+            "refId": "Memory treshold",
             "queryType": "",
             "relativeTimeRange": {
                 "from": 0,
@@ -52,14 +38,18 @@
                 "conditions": [
                     {
                         "evaluator": {
-                            "params": [${allocation_amount}],
+                            "params": [
+                                419430400
+                            ],
                             "type": "gt"
                         },
                         "operator": {
                             "type": "and"
                         },
                         "query": {
-                            "params": ["C"]
+                            "params": [
+                                "C"
+                            ]
                         },
                         "reducer": {
                             "params": [],
@@ -72,12 +62,25 @@
                     "type": "__expr__",
                     "uid": "__expr__"
                 },
-                "expression": "CPU Usage",
+                "expression": "Memory usage",
                 "intervalMs": 1000,
                 "maxDataPoints": 43200,
-                "refId": "CPU Usage Treshold",
+                "refId": "Memory treshold",
                 "type": "threshold"
             }
         }
-    ]
+    ],
+    "updated": "2025-03-21T17:25:24Z",
+    "noDataState": "NoData",
+    "execErrState": "Error",
+    "for": "5m",
+    "annotations": {
+        "description": "Checks memory usage for user on localhost.",
+        "summary": "User has exceeded reserved memory on localhost!"
+    },
+    "isPaused": true,
+    "notification_settings": {
+        "receiver": "admin contact point"
+    },
+    "record": null
 }
