@@ -159,7 +159,7 @@ def main():
     print(json.dumps(cpu_notification_to_all, indent=4))
 
 
-    # Create Notification for memory
+    # Create wrong Notification for memory
     print('Adding memory notification template.')
     input("Press Enter to continue...")
     memory_treshold_template = open(
@@ -174,7 +174,7 @@ def main():
             'type': 'grafana_resource_exceedance_task',
             'description': 'User memory exceeded limit!',
             'notification_template': memory_treshold_template.read(),
-            'default_amount': 419430400,
+            'default_amount': 1,
             'resource_id': memory_resource['id']
         }
     )
@@ -215,6 +215,33 @@ def main():
     memory_to_localhost.raise_for_status()
     memory_to_localhost = memory_to_localhost.json()
     print(json.dumps(memory_to_localhost, indent=4))
+
+
+    # Update Notification for memory
+    print('Adding memory corect notification template.')
+    input("Press Enter to continue...")
+    memory_treshold_template = open(
+        "../grafana_templates/Memory_Notification_template.json",
+        "r"
+    )
+    memory_notification = httpx.put(
+        url='http://localhost:8000/notification',
+        headers={'Authorization': f'Bearer {token}'},
+        json={
+            'id': memory_notification['id'],
+            'name': 'Default user memory threshold',
+            'type': 'grafana_resource_exceedance_task',
+            'description': 'User memory exceeded limit!',
+            'notification_template': memory_treshold_template.read(),
+            'default_amount': 400 * 1024 * 1024,
+            'resource_id': memory_resource['id']
+        }
+    )
+    memory_notification.raise_for_status()
+    memory_notification = memory_notification.json()
+    memory_treshold_template.close()
+    print(json.dumps(memory_notification, indent=4))
+
 
     # Remove CPU from localhost
     print('Removing CPU from localhost.')
