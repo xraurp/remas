@@ -70,7 +70,17 @@ def create_notification(
         if not notification.default_amount:
             raise HTTPException(
                 status_code=400,
-                detail="Default amount must be specified for grafana alerts!"
+                detail="Default amount is required for grafana alerts!"
+            )
+        if not notification.resource_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Resource must be set for grafana alerts!"
+            )
+        if not notification.notification_template:
+            raise HTTPException(
+                status_code=400,
+                detail="Notification template must be set for grafana alerts!"
             )
     if current_user.is_admin:
         notification.owner_id = None
