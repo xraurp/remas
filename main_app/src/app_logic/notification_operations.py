@@ -62,6 +62,7 @@ def create_notification(
     notification.id = None
     notification.receivers_groups = []
     notification.receivers_users = []
+    notification.type = NotificationType(notification.type)
     if is_scheduleble_notification(notification):
         if not notification.time_offset:
             notification.time_offset = 0
@@ -141,6 +142,9 @@ def update_notification(
             detail=f"Can't update notification owned by another user!"
         )
     
+    # Fix notification type
+    notification.type = NotificationType(notification.type)
+    
     # check if notification needs to be rescheduled
     reschedule = False
     remove_scheudling = False
@@ -155,40 +159,51 @@ def update_notification(
     remove_old_notification = False
     if db_notification.resource_id != notification.resource_id:
         remove_old_notification = True
+        grafana_remove_alert(notification=db_notification)
 
     # update notification
     db_notification.name = notification.name
     db_notification.description = notification.description
     db_notification.type = notification.type
     db_notification.notification_template = notification.notification_template
-    if not is_grafana_alert(db_notification):
-        # update schedulebe notification
-        db_notification.time_offset = notification.time_offset
-    else:
-        # update grafana alert
-        db_notification.default_amount = notification.default_amount
-        db_notification.resource_id = notification.resource_id
-        if not db_notification.default_amount:
-            raise HTTPException(
-                status_code=400,
-                detail="Default amount is required for grafana alerts!"
+    try:
+        if not is_grafana_alert(db_notification):
+            # update schedulebe notification
+            db_notification.time_offset = notification.time_offset
+        else:
+            # update grafana alert
+            db_notification.default_amount = notification.default_amount
+            db_notification.resource_id = notification.resource_id
+            if not db_notification.default_amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Default amount is required for grafana alerts!"
+                )
+            if not db_notification.resource_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Resource must be set for grafana alerts!"
+                )
+            if not db_notification.notification_template:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Notification template must be set for grafana "
+                           "alerts!"
+                )
+        db_session.commit()
+    except Exception as e:
+        if remove_old_notification:
+            # rollback changes
+            db_session.rollback()
+            db_session.refresh(db_notification)
+            update_grafana_alert_for_all_users_and_groups(
+                notification=db_notification,
+                db_session=db_session
             )
-        if not db_notification.resource_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Resource must be set for grafana alerts!"
-            )
-        if not db_notification.notification_template:
-            raise HTTPException(
-                status_code=400,
-                detail="Notification template must be set for grafana alerts!"
-            )
-    db_session.commit()
+        raise e
     db_session.refresh(db_notification)
     # check if notification is grafana alert and update it in grafana
     if is_grafana_alert(db_notification):
-        if remove_old_notification:
-            grafana_remove_alert(notification=db_notification)
         update_grafana_alert_for_all_users_and_groups(
             notification=db_notification,
             db_session=db_session
