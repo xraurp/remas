@@ -27,6 +27,7 @@ from src.app_logic.auxiliary_operations import (
     get_user_notifications_by_type,
     get_members_including_subgroups
 )
+from src.config import get_settings
 
 def grafana_add_or_update_alert_rule(
     user: User,
@@ -106,10 +107,16 @@ def grafana_add_or_update_alert_rule(
     )
     config = json.loads(config)
 
+    if notification.owner:
+        owner = notification.owner.username
+    else:
+        owner = 'admin'
+
     # Set alert labels
     labels = GrafanaAlertLabels(
         default=True if allocation_amount is None else False,
         username=user.username,
+        notification_owner=owner,
         node_id=node.id,
         resource_id=resource.id,
         notification_id=notification.id
@@ -161,24 +168,43 @@ def grafana_add_or_update_alert_rule(
                         "Grafana!"
             )
 
-def get_current_required_resources(user: User, db_session: Session) -> dict:
+def get_tasks_at_timepoint(
+    user: User,
+    timepoint: datetime,
+    db_session: Session,
+    lock_rows: bool = False
+) -> list[Task]:
     """
-    Calculates current required resources for user.
-    :param user (User): user to calculate required resources for
+    Returns current tasks for given user at given time.
+    :param user (User): user to get tasks for
+    :param timepoint (datetime): time to get tasks at
     :param db_session (Session): database session to use
-    :return (dict): current required resources
+    :param lock_rows (bool): whether to lock rows (default: False)
+    :return (list[Task]): list of current tasks
     """
-    time_trashold = datetime.now()
-    
-    # get current tasks for given user
-    tasks = db_session.query(Task).filter(
-        Task.status.in_([TaskStatus.running, TaskStatus.scheduled]),
-        Task.owner_id == user.id,
-        Task.start_time <= time_trashold + timedelta(minutes=1)
-    ).all()
+    if lock_rows:
+        tasks = db_session.query(Task).with_for_update().filter(
+            Task.status.in_([TaskStatus.running, TaskStatus.scheduled]),
+            Task.owner_id == user.id,
+            Task.start_time <= timepoint
+        ).all()
+    else:
+        tasks = db_session.query(Task).filter(
+            Task.status.in_([TaskStatus.running, TaskStatus.scheduled]),
+            Task.owner_id == user.id,
+            Task.start_time <= timepoint
+        ).all()
 
+    return tasks
+
+def calculate_required_resources_for_tasks(tasks: list[Task]) -> dict:
+    """
+    Calculates required resources for given tasks.
+    :param tasks (list[Task]): list of tasks to calculate required resources for
+    :return (dict): required resources
+    """
     required_resources = {}
-    
+
     for task in tasks:
         for ra in task.resource_allocations:
             if ra.resource_id not in required_resources:
@@ -189,6 +215,26 @@ def get_current_required_resources(user: User, db_session: Session) -> dict:
                 required_resources[ra.resource_id][ra.node_id] += ra.amount
 
     return required_resources
+
+def get_current_required_resources(user: User, db_session: Session) -> dict:
+    """
+    Calculates current required resources for user.
+    :param user (User): user to calculate required resources for
+    :param db_session (Session): database session to use
+    :return (dict): current required resources
+    """
+    timepoint = datetime.now() + timedelta(
+        seconds=get_settings().task_scheduler_precision_seconds
+    )
+    
+    # get current tasks for given user
+    tasks = get_tasks_at_timepoint(
+        user=user,
+        timepoint=timepoint,
+        db_session=db_session
+    )
+
+    return calculate_required_resources_for_tasks(tasks=tasks)
 
 def grafana_get_existing_user_alerts(
     user: User,
@@ -241,13 +287,26 @@ def filter_existing_user_alert(
         return alert
     return None
 
-def grafana_add_or_update_user_alerts(user: User, db_session: Session) -> None:
+def grafana_add_or_update_user_alerts(
+    user: User,
+    db_session: Session,
+    timepoint: datetime = None,
+    lock_rows: bool = False
+) -> None:
     """
     Adds or updates Grafana alerts for given user. Also removes alerts that are
     not assigned to user. (Userful when user group is changed etc.)
     :param user (User): user to add alerts for
     :param db_session (Session): database session to use
+    :param timepoint (datetime): timepoint to get tasks for
+        (to update alerts with correct resource amounts)
+    :param lock_rows (bool): lock rows in database until update is finished
     """
+    if timepoint is None:
+        timepoint = datetime.now() + timedelta(
+            seconds=get_settings().task_scheduler_precision_seconds
+        )
+    
     # get alerts / notifications from db
     user_notifications = get_user_notifications_by_type(
         types=[NotificationType.grafana_resource_exceedance_task],
@@ -255,9 +314,14 @@ def grafana_add_or_update_user_alerts(user: User, db_session: Session) -> None:
     )
 
     # get curently required resources for user tasks
-    required_resources = get_current_required_resources(
+    current_tasks = get_tasks_at_timepoint(
         user=user,
-        db_session=db_session
+        timepoint=timepoint,
+        db_session=db_session,
+        lock_rows=lock_rows
+    )
+    required_resources = calculate_required_resources_for_tasks(
+        tasks=current_tasks
     )
 
     # get existing user alerts from Grafana
@@ -291,7 +355,7 @@ def grafana_add_or_update_user_alerts(user: User, db_session: Session) -> None:
 
             # add or update alert
             if resource.id in required_resources and \
-               node.id in required_resources[resource_id]:
+               node.id in required_resources[resource.id]:
                 amount = required_resources[resource.id][node.id]
             else:
                 amount = None
@@ -535,72 +599,6 @@ def grafana_add_alert_to_group(
             db_session=db_session
         )
 
-def grafana_update_user_alerts_on_task_event(
-    user: User,
-    db_session: Session
-) -> None:
-    """
-    Updates user's Grafana alerts when a task starts or ends.
-    :param user (User): user to update alerts for
-    :param db_session (Session): database session to use
-    """
-    # get curently required resources for user tasks
-    required_resources = get_current_required_resources(
-        user=user,
-        db_session=db_session
-    )
-
-    # get existing user alerts from Grafana
-    user_alerts = grafana_get_existing_user_alerts(
-        user=user,
-        db_session=db_session
-    )
-
-    # get user alert folder from Grafana
-    folder = get_folders_from_grafana(
-        folder_names=[f'{user.username}_task_alerts']
-    )[0]
-
-    # get resources, nodes and notifications from database
-    resources = db_session.scalars(select(Resource)).all()
-    nodes = db_session.scalars(select(Node)).all()
-    notifications = get_user_notifications_by_type(
-        types=[NotificationType.grafana_resource_exceedance_task],
-        user=user
-    )
-    
-    # set new alert limits based on required resources
-    for alert in user_alerts:
-        resource = resources.filter(
-            Resource.id == int(alert.get('labels', {}).get('resource_id', None))
-        ).first()
-        node = nodes.filter(
-            Node.id == int(alert.get('labels', {}).get('node_id', None))
-        ).first()
-        notification = notifications.filter(
-            Notification.id == \
-            int(alert.get('labels', {}).get('notification_id', None))
-        ).first()
-
-        if resource.id in required_resources and \
-           node.id in required_resources[resource.id]:
-            allocation_amount = required_resources[resource.id][node.id]
-        else:
-            allocation_amount = None
-        
-        grafana_add_or_update_alert_rule(
-            user=user,
-            node=node,
-            resource=resource,
-            notification=notification,
-            folder_uid=folder['uid'],
-            resource_amount=resource.nodes.filter(
-                NodeProvidesResource.node_id == node.id
-            ).first().amount,
-            allocation_amount=allocation_amount,
-            existing_alert=alert
-        )
-
 def grafana_remove_alert(
     notification: Notification
 ) -> None:
@@ -671,3 +669,5 @@ def grafana_remove_alert_for_node(
                 detail=f"Failed to remove alert {notification.name} "
                         "from Grafana!"
             )
+
+# TODO - add alert evaluation group on Grafana init

@@ -11,7 +11,7 @@ from src.db.models import (
     User
 )
 from sqlmodel import select, Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, NoResultFound
 from src.schemas.task_entities import (
     TaskResponseFull,
     TaskResourceAllocationResponse,
@@ -28,6 +28,10 @@ from src.app_logic.notification_operations import (
 )
 from src.app_logic.authentication import insufficientPermissionsException
 from src.schemas.authentication_entities import CurrentUserInfo
+from src.app_logic.scheduled_event_processing import (
+    cancel_next_event_processing,
+    schedule_next_event_processing
+)
 from fastapi import HTTPException
 from datetime import datetime
 
@@ -277,14 +281,12 @@ def update_task_scheduling_from_request(
     existing_task.start_time = task_request.start_time
     existing_task.end_time = task_request.end_time
     now = datetime.now()
+    # update event times
     for e in existing_task.events:
         if e.type == EventType.task_start:
             e.time = task_request.start_time
         if e.type == EventType.task_end:
             e.time = task_request.end_time
-    
-    # TODO - change scheduling of the notifications connected to start/end of
-    #        the task
 
 def check_user_limit(
     user_limits: dict[int, dict[int, Limit]],
@@ -366,7 +368,6 @@ def reschedule_task_notifications(
     :param current_user (CurrentUserInfo): currently logged in user information
     :param db_session (Session): database session
     """
-    # TODO - add current user data
     notifications = get_notifications_by_user_id(
         user_id=current_user.user_id,
         current_user=current_user,
@@ -403,11 +404,13 @@ def schedule_task(
             detail="Task start time must be before its end time!"
         )
     
-    # TODO - lock the task table while scheduling
     # Check if existing task is being updated
     if task.id:
-        existing_task = db_session.get(Task, task.id)
-        if not existing_task:
+        try:
+            existing_task = db_session.scalars(
+                select(Task).with_for_update().where(Task.id == task.id)
+            ).one()
+        except NoResultFound:
             raise HTTPException(
                 status_code=404,
                 detail=f"Task with id {task.id} not found!"
@@ -479,7 +482,7 @@ def schedule_task(
     
     # Find overlapping tasks (excluding current task)
     overlapping_tasks = db_session.scalars(
-        select(Task).where(
+        select(Task).with_for_update().where(
             Task.status.in_([TaskStatus.scheduled, TaskStatus.running]),
             Task.start_time <= task.end_time,
             Task.end_time >= task.start_time
@@ -559,7 +562,10 @@ def schedule_task(
         db_session=db_session
     )
     db_session.commit()
-    # TODO - unlock the task table after scheduling
+
+    # reschedule background job for starting tasks
+    cancel_next_event_processing()
+    schedule_next_event_processing(db_session=db_session)
 
     db_session.refresh(existing_task)
     return generate_task_response_full(task=existing_task)
