@@ -74,23 +74,23 @@ def insert_test_data(engine: Engine) -> None:
             password=get_password_hash("test"),
             uid=1000
         ))
-        session.add(NodeDashboardTemplate(
-            name="Node dashboard",
-            template=json.dumps({
-                "dashboard": {
-                    "id": None,
-                    "uid": None,
-                    "title": "Node ${node_name} overview",
-                    "tags": [ "${node_name}", "${node_id}" ],
-                    "timezone": "browser",
-                    "schemaVersion": 16,
-                    "refresh": "30s"
-                },
-                "folderUid": "",
-                "message": "",
-                "overwrite": True
-            })
-        ))
+#        session.add(NodeDashboardTemplate(
+#            name="Node dashboard",
+#            template=json.dumps({
+#                "dashboard": {
+#                    "id": None,
+#                    "uid": None,
+#                    "title": "Node ${node_name} overview",
+#                    "tags": [ "${node_name}", "${node_id}" ],
+#                    "timezone": "browser",
+#                    "schemaVersion": 16,
+#                    "refresh": "30s"
+#                },
+#                "folderUid": "",
+#                "message": "",
+#                "overwrite": True
+#            })
+#        ))
         session.commit()
         session.add(Node(
             name="localhost",

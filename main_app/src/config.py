@@ -12,7 +12,31 @@ class Settings(BaseSettings):
     # token signing
     access_token_secret_key: str = os.environ.get('SECRET_KEY')
     access_token_signing_algorithm: str = os.environ.get('ALGORITHM', 'HS256')
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = os.environ.get(
+        'TOKEN_EXPIRE_MINUTES',
+        60
+    )
+    # task scheduling
+    # Interval in which scheduler will query tasks in advance. Larger interval
+    # will result in less accurate scheduling but will result in less load on
+    # scheduler.
+    task_scheduler_precision_seconds: int = os.environ.get(
+        'TASK_SCHEDULER_PRECISION_SECONDS',
+        60
+    )
+    task_scheduler_retry_limit_seconds: int = os.environ.get(
+        'TASK_SCHEDULER_RETRY_LIMIT_SECONDS',
+        120
+    )
+    # email
+    smtp_host: str = os.environ.get('SMTP_HOST', 'localhost')
+    smtp_port: int = os.environ.get('SMTP_PORT', 465)
+    smtp_user: str = os.environ.get('SMTP_USER')
+    smtp_password: str = os.environ.get('SMTP_PASSWORD')
+    smtp_enabled: bool = os.environ.get('SMTP_ENABLED', False)
+    smtp_from_address: str = os.environ.get('SMTP_FROM_ADDRESS', smtp_user)
+    smtp_from_name: str = os.environ.get('SMTP_FROM_NAME', 'REMAS')
+    smtp_starttls_enabled: bool = os.environ.get('SMTP_STARTTLS_ENABLED', False)
     # grafana config
     grafana_url: str = os.environ.get(
         'GRAFANA_URL',
@@ -20,7 +44,6 @@ class Settings(BaseSettings):
     )
     grafana_username: str = os.environ.get('GRAFANA_USERNAME', 'admin')
     grafana_password: str = os.environ.get('GRAFANA_PASSWORD', 'admin')
-    # TODO - add grafana email configuration
 
     # grafana user system folder templates
     grafana_user_system_folder_templates: list[str] = [

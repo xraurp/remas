@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from src.db.connection import init_db_engine
 #from src.app_logic.authentication import init_auth
+from src.app_logic.scheduled_event_processing import (
+    init_scheduler,
+    shutdown_scheduler
+)
 from src.routes import (
     user_route,
     group_route,
@@ -20,8 +24,12 @@ async def lifespan(app: FastAPI):
     # Startup tasks
     init_db_engine()
     #init_auth()
+    init_scheduler()
+
     yield
+    
     # Cleanup tasks
+    shutdown_scheduler()
 
 
 app = FastAPI(lifespan=lifespan)
