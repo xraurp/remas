@@ -11,8 +11,6 @@ from src.app_logic.grafana_alert_operations import (
 )
 from fastapi import HTTPException
 
-# TODO - query resources when receiving node
-
 def generate_node_response(node: Node) -> NodeResponse:
     """
     Generates node response
@@ -97,6 +95,7 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
         )
     db_node.name = node.name
     db_node.description = node.description
+    # TODO - update alerts in Grafana
     # TODO - update node dashboard in Grafana
     db_session.commit()
     db_session.refresh(db_node)

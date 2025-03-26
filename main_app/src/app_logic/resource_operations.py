@@ -37,6 +37,7 @@ def delete_resource(resource_id: int, db_session: Session) -> None:
     # remove Grafana alerts
     for notification in resource.notifications:
         grafana_remove_alert(notification=notification)
+    # TODO - remove resource dashboard from Grafana
     db_session.delete(resource)
     db_session.commit()
 
@@ -72,6 +73,8 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
     db_resource.description = resource.description
     db_session.commit()
     db_session.refresh(db_resource)
+    # TODO - update all Grafana alerts for resource
+    # TODO - update panels for resource
     return db_resource
 
 def add_resource_alias(
