@@ -4,6 +4,7 @@ from pydantic import BaseModel, model_serializer
 class GrafanaAlertLabels(BaseModel):
     default: bool = False
     username: str
+    notification_owner: str
     node_id: int
     resource_id: int
     notification_id: int
@@ -13,6 +14,7 @@ class GrafanaAlertLabels(BaseModel):
         result = {
             "default": str(self.default).lower(),
             "username": self.username,
+            "notification_owner": self.notification_owner,
             "node_id": str(self.node_id),
             "resource_id": str(self.resource_id),
             "notification_id": str(self.notification_id)
