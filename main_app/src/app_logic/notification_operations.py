@@ -62,7 +62,13 @@ def create_notification(
     notification.id = None
     notification.receivers_groups = []
     notification.receivers_users = []
-    notification.type = NotificationType(notification.type)
+    try:
+        notification.type = NotificationType(notification.type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid notification type {notification.type}!"
+        )
     if is_scheduleble_notification(notification):
         if not notification.time_offset:
             notification.time_offset = 0
