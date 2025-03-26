@@ -266,7 +266,7 @@ class Task(SQLModel, table=True):
     Task is a job that user executes on a node.
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(index=True)
     description: str | None = None
     start_time: datetime = Field(index=True)
     end_time: datetime = Field(index=True)
@@ -295,7 +295,7 @@ class Task(SQLModel, table=True):
 
 class TaskTag(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(index=True)
     description: str | None = None
 
     user_id: int = Field(
