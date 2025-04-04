@@ -17,7 +17,7 @@ def uplaod_CPU_notification(token: str) -> None:
         "../grafana_templates/CPU_Notificaion_template.json",
         "r"
     )
-    cpu_notification = httpx.post(
+    cpu_notification = httpx.put(
         url='http://localhost:8000/notification',
         headers={'Authorization': f'Bearer {token}'},
         json={
@@ -25,8 +25,9 @@ def uplaod_CPU_notification(token: str) -> None:
             'type': 'grafana_resource_exceedance_task',
             'description': 'User exceeded CPU limit!',
             'notification_template': cpu_treshold_template.read(),
-            'resource_id': 40,
-            'default_amount': 1
+            'resource_id': 2,
+            'default_amount': 1,
+            'id': 1
         }
     )
     cpu_notification.raise_for_status()
@@ -39,7 +40,7 @@ def uplaod_memory_notification(token: str) -> None:
         "../grafana_templates/Memory_Notification_template.json",
         "r"
     )
-    memory_notification = httpx.post(
+    memory_notification = httpx.put(
         url='http://localhost:8000/notification',
         headers={'Authorization': f'Bearer {token}'},
         json={
@@ -48,7 +49,8 @@ def uplaod_memory_notification(token: str) -> None:
             'description': 'User memory exceeded limit!',
             'notification_template': memory_treshold_template.read(),
             'default_amount': 400 * 1024 * 1024,
-            'resource_id': 39
+            'resource_id': 1,
+            'id': 2
         }
     )
     memory_notification.raise_for_status()
