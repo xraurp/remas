@@ -3,15 +3,20 @@ from fastapi.security import OAuth2PasswordRequestForm
 from src.app_logic.authentication import (
     login,
     change_user_password,
-    set_user_password
+    set_user_password,
+    verify_login_on_refresh,
+    refresh_token
 )
 from src.schemas.authentication_entities import (
     TokenResponse,
     ChangePasswordRequest,
-    SetUserPasswordRequest
+    SetUserPasswordRequest,
+    CurrentUserInfo
 )
 from . import SessionDep, LoginDep
 from typing import Annotated
+
+RefreshDep = Annotated[CurrentUserInfo, Depends(verify_login_on_refresh)]
 
 authentication_route = APIRouter(
     prefix="/authentication"
@@ -30,6 +35,17 @@ def get_token(
         password=form_data.password,
         db_session=session
     )
+
+@authentication_route.post("/refresh", response_model=TokenResponse)
+def get_new_token(
+    current_user: RefreshDep,
+    session: SessionDep
+) -> TokenResponse:
+    """
+    Returns new JWT token to use for authentication in future requests.
+    Used to refresh token befere it expires, so the user is not logged out.
+    """
+    return refresh_token(current_user=current_user, db_session=session)
 
 @authentication_route.post("/change-password", response_model=dict)
 def change_password(

@@ -83,14 +83,19 @@ def create_token(token_data: dict) -> str:
     """
     settings = get_settings()
     data = token_data.copy()
-    expiration_time = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
-    data['exp'] = expiration_time
+    if data['is_refresh_token']:
+        interval = timedelta(
+            minutes=settings.token_refresh_expire_minutes
+        )
+    else:
+        interval = timedelta(
+            minutes=settings.token_access_expire_minutes
+        )
+    data['exp'] = datetime.now(timezone.utc) + interval
     return jwt.encode(
         payload=data,
-        key=settings.access_token_secret_key,
-        algorithm=settings.access_token_signing_algorithm
+        key=settings.token_secret_key,
+        algorithm=settings.token_signing_algorithm
     )
 
 def login(username: str, password: str, db_session: Session) -> TokenResponse:
@@ -107,18 +112,52 @@ def login(username: str, password: str, db_session: Session) -> TokenResponse:
         db_session=db_session
     )
     admin_status = is_admin(user=user)
+    access_token = create_token(token_data={
+        'user_id': user.id,
+        'sub': user.username,
+        'is_admin': admin_status,
+        'is_refresh_token': False
+    })
+    refresh_token = create_token(token_data={
+        'user_id': user.id,
+        'sub': user.username,
+        'is_admin': admin_status,
+        'is_refresh_token': True
+    })
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+def refresh_token(
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> TokenResponse:
+    """
+    Refreshes access and refresh tokens
+    :param current_user (CurrentUserInfo): user info
+    :param db_session (Session): database session
+    :return (TokenResponse): JWT token
+    """
+    user = db_session.get(User, current_user.user_id)
+    admin_status = is_admin(user=user)
     token = create_token(token_data={
         'user_id': user.id,
         'sub': user.username,
-        'is_admin': admin_status
+        'is_admin': admin_status,
+        'is_refresh_token': False
     })
-    return TokenResponse(access_token=token, token_type="bearer")
+    refresh_token = create_token(token_data={
+        'user_id': user.id,
+        'sub': user.username,
+        'is_admin': admin_status,
+        'is_refresh_token': True
+    })
+    return TokenResponse(access_token=token, refresh_token=refresh_token)
+    
+    
 
-def verify_login(token: tokenDep) -> CurrentUserInfo:
+def verify_token_data(token: str) -> dict:
     """
-    Verifies token and returns current user information
-        (user that send the request).
-    :return (CurrentUserInfo): Current user info - user_id, username, is_admin
+    Verifies token and returns its data.
+    :return (dict): token data
     """
     settings = get_settings()
     credentials_exception = HTTPException(
@@ -130,11 +169,17 @@ def verify_login(token: tokenDep) -> CurrentUserInfo:
     try:
         token_data = jwt.decode(
             jwt=token,
-            key=settings.access_token_secret_key,
-            algorithms=[settings.access_token_signing_algorithm],
+            key=settings.token_secret_key,
+            algorithms=[settings.token_signing_algorithm],
             options={
                 'verify_signature': True,
-                'require': ['exp', 'sub', 'user_id', 'is_admin'],
+                'require': [
+                    'exp',
+                    'sub',
+                    'user_id',
+                    'is_admin',
+                    'is_refresh_token'
+                ],
                 'verify_exp': True
             }
         )
@@ -142,6 +187,42 @@ def verify_login(token: tokenDep) -> CurrentUserInfo:
         logging.error(f'{e}')
         raise credentials_exception
 
+    return token_data
+
+def verify_login(token: tokenDep) -> CurrentUserInfo:
+    """
+    Verifies access token and returns current user information
+        (user that send the request).
+    :return (CurrentUserInfo): Current user info - user_id, username, is_admin
+    """
+    token_data = verify_token_data(token=token)
+
+    if token_data['is_refresh_token']:
+        raise HTTPException(
+            status_code=401,
+            detail="Refresh token was used instead of access token!"
+        )
+    
+    return CurrentUserInfo(
+        user_id=token_data['user_id'],
+        username=token_data['sub'],
+        is_admin=token_data['is_admin']
+    )
+
+def verify_login_on_refresh(token: tokenDep) -> CurrentUserInfo:
+    """
+    Verifies refresh token and returns current user information
+        (user that send the request).
+    :return (CurrentUserInfo): Current user info - user_id, username, is_admin
+    """
+    token_data = verify_token_data(token=token)
+
+    if not token_data['is_refresh_token']:
+        raise HTTPException(
+            status_code=401,
+            detail="Access token was used instead of refresh token!"
+        )
+    
     return CurrentUserInfo(
         user_id=token_data['user_id'],
         username=token_data['sub'],

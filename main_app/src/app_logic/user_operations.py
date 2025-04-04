@@ -2,7 +2,8 @@ from src.db.models import User, Group
 from src.schemas.user_entities import UpdateUserRequest
 from src.app_logic.authentication import get_password_hash
 from sqlmodel import select, Session
-from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException, status
 from src.app_logic.authentication import insufficientPermissionsException
 from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.grafana_user_operations import (
@@ -29,8 +30,20 @@ def create_user(
             )
     password = user.password
     user.password = get_password_hash(user.password)
-    db_session.add(user)
-    db_session.commit()
+    try:
+        db_session.add(user)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create user in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user in database: {e}"
+        )
     db_session.refresh(user)
     # init user in Grafana (including password)
     grafana_create_or_update_user(
@@ -87,7 +100,19 @@ def update_user(
     db_user.name = user.name
     db_user.surname = user.surname
     db_user.email = user.email
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update user in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user in database: {e}"
+        )
     db_session.refresh(db_user)
     # update user in Grafana
     grafana_create_or_update_user(user=db_user, db_session=db_session)

@@ -4,7 +4,7 @@ from src.db.models import User
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str
+    refresh_token: str
 
 class CurrentUserInfo(BaseModel):
     is_admin: bool

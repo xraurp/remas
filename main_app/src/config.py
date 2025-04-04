@@ -10,11 +10,17 @@ class Settings(BaseSettings):
     host: str = os.environ.get("HOST", "0.0.0.0")
     port: int = os.environ.get("PORT", 8000)
     # token signing
-    access_token_secret_key: str = os.environ.get('SECRET_KEY')
-    access_token_signing_algorithm: str = os.environ.get('ALGORITHM', 'HS256')
-    access_token_expire_minutes: int = os.environ.get(
-        'TOKEN_EXPIRE_MINUTES',
-        60
+    token_secret_key: str = os.environ.get('SECRET_KEY')
+    token_signing_algorithm: str = os.environ.get('ALGORITHM', 'HS256')
+    # access token expiration time
+    token_access_expire_minutes: int = os.environ.get(
+        'TOKEN_ACCESS_EXPIRE_MINUTES',
+        20
+    )
+    # refresh token expiration time
+    token_refresh_expire_minutes: int = os.environ.get(
+        'TOKEN_REFRESH_EXPIRE_MINUTES',
+        120
     )
     # task scheduling
     # Interval in which scheduler will query tasks in advance. Larger interval
