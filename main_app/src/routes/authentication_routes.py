@@ -47,7 +47,7 @@ def get_new_token(
     """
     return refresh_token(current_user=current_user, db_session=session)
 
-@authentication_route.post("/change-password", response_model=dict)
+@authentication_route.post("/change_password", response_model=dict)
 def change_password(
     request: ChangePasswordRequest,
     current_user: LoginDep,
@@ -63,7 +63,7 @@ def change_password(
     )
     return {"message": "Password changed successfully!"}
 
-@authentication_route.post("/set-password", response_model=dict)
+@authentication_route.post("/set_password", response_model=dict)
 def set_password(
     request: SetUserPasswordRequest,
     current_user: LoginDep,
