@@ -26,6 +26,13 @@ def create_group(
     group.members = []
     group.notifications = []
 
+    if group.name == 'None':
+        raise HTTPException(
+            status_code=400,
+            detail="'None' is reserved keyword that cannot "
+                   "be used as group name!"
+        )
+
     db_session.add(group)
     db_session.commit()
     db_session.refresh(group)
@@ -62,6 +69,12 @@ def update_group(group: Group, db_session: Session) -> Group:
         raise HTTPException(
             status_code=404,
             detail=f"Group with id {group.id} not found!"
+        )
+    if group.name == 'None':
+        raise HTTPException(
+            status_code=400,
+            detail="'None' is reserved keyword that cannot "
+                   "be used as group name!"
         )
     db_group.name = group.name
     db_group.description = group.description

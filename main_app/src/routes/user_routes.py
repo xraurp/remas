@@ -8,7 +8,7 @@ from src.app_logic.user_operations import (
 )
 from src.db.models import User
 from src.schemas.user_entities import (
-    UpdateUserRequest,
+    UserNoPasswordSimple,
     UserNoPassword
 )
 from src.app_logic.authentication import ensure_admin_permissions
@@ -58,7 +58,7 @@ def user_create(
 
 @user_route.put("", response_model=UserNoPassword)
 def user_update(
-    user: UpdateUserRequest,
+    user: UserNoPasswordSimple,
     current_user: LoginDep,
     session: SessionDep
 ) -> UserNoPassword:

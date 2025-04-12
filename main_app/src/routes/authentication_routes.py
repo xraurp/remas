@@ -61,7 +61,7 @@ def change_password(
         current_user=current_user,
         db_session=session
     )
-    return {"message": "Password changed successfully!"}
+    return {'detail': 'Password changed successfully!'}
 
 @authentication_route.post("/set_password", response_model=dict)
 def set_password(
@@ -81,4 +81,4 @@ def set_password(
         request=request,
         db_session=session
     )
-    return {"message": "Password set successfully!"}
+    return {'detail': 'Password set successfully!'}

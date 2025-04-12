@@ -1,11 +1,11 @@
 from src.db.models import User, Group
-from src.schemas.user_entities import UpdateUserRequest
 from src.app_logic.authentication import get_password_hash
 from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from src.app_logic.authentication import insufficientPermissionsException
 from src.schemas.authentication_entities import CurrentUserInfo
+from src.schemas.user_entities import UserNoPasswordSimple
 from src.app_logic.grafana_user_operations import (
     grafana_create_or_update_user,
     grafana_remove_user
@@ -80,7 +80,7 @@ def get_all_users(db_session: Session) -> list[User]:
     return db_session.scalars(select(User)).all()
 
 def update_user(
-    user: UpdateUserRequest,
+    user: UserNoPasswordSimple,
     current_user: CurrentUserInfo,
     db_session: Session
 ) -> User:
@@ -100,6 +100,15 @@ def update_user(
     db_user.name = user.name
     db_user.surname = user.surname
     db_user.email = user.email
+
+    if user.uid != db_user.uid:
+        if not current_user.is_admin:
+            raise HTTPException(
+                status_code=403,
+                detail="Only admin can change uid!"
+            )
+        db_user.uid = user.uid
+
     try:
         db_session.commit()
     except IntegrityError as e:
