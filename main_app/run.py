@@ -7,11 +7,13 @@ if __name__ == "__main__":
     import uvicorn
     import os
     from src.config import get_settings
+    import logging
 
     settings = get_settings()
 
     uvicorn.run(
         app="src.main:app",
         host=settings.host,
-        port=settings.port
+        port=settings.port,
+        log_level=logging.DEBUG if settings.debug else logging.INFO,
     )

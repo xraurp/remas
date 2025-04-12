@@ -18,6 +18,12 @@ from src.routes import (
     notification_route,
     authentication_route
 )
+from src.config import get_settings
+import logging
+
+if get_settings().debug:
+    rh = logging.getLogger('root')
+    rh.setLevel(logging.DEBUG)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

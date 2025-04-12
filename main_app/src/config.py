@@ -3,6 +3,9 @@ import os
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    debug: bool = os.environ.get("DEBUG", False)
+
+    # database
     database_url: str = os.environ.get(
         "DATABASE_URL",
         "postgresql://remas_main:test123@localhost:15432/remas_main_db"
@@ -15,12 +18,12 @@ class Settings(BaseSettings):
     # access token expiration time
     token_access_expire_minutes: int = os.environ.get(
         'TOKEN_ACCESS_EXPIRE_MINUTES',
-        20
+        1
     )
     # refresh token expiration time
     token_refresh_expire_minutes: int = os.environ.get(
         'TOKEN_REFRESH_EXPIRE_MINUTES',
-        120
+        10
     )
     # task scheduling
     # Interval in which scheduler will query tasks in advance. Larger interval
