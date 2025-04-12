@@ -15,8 +15,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 import bcrypt
 import logging
-from src.app_logic.grafana_user_operations import grafana_create_or_update_user
+from src.app_logic.grafana_user_operations import (
+    grafana_create_or_update_user,
+    grafana_change_user_password
+)
 from src.app_logic.auxiliary_operations import is_admin
+import json
 
 
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="token")
@@ -165,6 +169,19 @@ def verify_token_data(token: str) -> dict:
         detail="Could not validate credentials!",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    if settings.debug:
+        try:
+            # decode without verifying signature
+            decoded = jwt.decode(
+                jwt=token,
+                key=settings.token_secret_key,
+                algorithms=[settings.token_signing_algorithm],
+                verify=False
+            )
+            logging.debug(f'Token: {json.dumps(decoded, indent=4)}')
+        except InvalidTokenError as e:
+            logging.debug(f'Failed to decode token for debbuging: {e}')
     
     try:
         token_data = jwt.decode(
