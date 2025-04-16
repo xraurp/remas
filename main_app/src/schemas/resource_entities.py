@@ -6,6 +6,7 @@ class ResourceResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
+    unit: str
     providing_nodes: list[Node] = []
     aliases: list[ResourceAlias]
 

@@ -27,7 +27,8 @@ def generate_node_response(node: Node) -> NodeResponse:
             id=resource.resource_id,
             name=resource.resource.name,
             description=resource.resource.description,
-            amount=resource.amount
+            amount=resource.amount,
+            unit=resource.resource.unit
         ))
     return node_response
 
@@ -120,11 +121,20 @@ def add_resource_to_node(
             status_code=404,
             detail=f"Resource with id {request.resource_id} not found!"
         )
-    node.resources.append(NodeProvidesResource(
-        node_id=request.node_id,
-        resource_id=request.resource_id,
-        amount=request.amount
-    ))
+    npr = db_session.get(
+        NodeProvidesResource,
+        (request.node_id, request.resource_id)
+    )
+    if npr:
+        # update existing node resource
+        npr.amount = request.amount
+    else:
+        # add new node resource
+        node.resources.append(NodeProvidesResource(
+            node_id=request.node_id,
+            resource_id=request.resource_id,
+            amount=request.amount
+        ))
     db_session.commit()
     db_session.refresh(node)
     # add Grafana alerts for node

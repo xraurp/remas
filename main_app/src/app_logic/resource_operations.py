@@ -1,4 +1,4 @@
-from src.db.models  import Resource, ResourceAlias
+from src.db.models  import Resource, ResourceAlias, Unit
 from sqlmodel import select, Session
 from src.schemas.resource_entities import AliasRequest
 from fastapi import HTTPException
@@ -15,6 +15,14 @@ def create_resource(
     resource.id = None
     resource.nodes = []
     resource.notifications = []
+
+    try:
+        resource.unit = Unit(resource.unit)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unit {resource.unit} is not supported!"
+        )
 
     db_session.add(resource)
     db_session.commit()
@@ -71,6 +79,13 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
         )
     db_resource.name = resource.name
     db_resource.description = resource.description
+    try:
+        db_resource.unit = Unit(resource.unit)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unit {resource.unit} is not supported!"
+        )
     db_session.commit()
     db_session.refresh(db_resource)
     # TODO - update all Grafana alerts for resource

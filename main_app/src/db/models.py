@@ -150,6 +150,14 @@ class ResourceHasAlias(SQLModel, table=True):
         ondelete="CASCADE"
     )
 
+class Unit(enum.Enum):
+    """
+    Enum for unit.
+    """
+    NONE = ""
+    BYTES_SI = "Bytes (SI)"
+    BYTES_IEC = "Bytes (IEC)"
+
 class Resource(SQLModel, table=True):
     """
     Resource is provided by a node, like CPU, RAM, GPU, etc.
@@ -157,6 +165,7 @@ class Resource(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True)
     description: str | None = None
+    unit: Unit = Unit.NONE
 
     nodes: list["NodeProvidesResource"] = Relationship(
         back_populates="resource",

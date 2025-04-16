@@ -4,6 +4,7 @@ class NodeResourceResponse(BaseModel):
     id: int
     name: str
     description: str | None = None
+    unit: str
     amount: int
 
 class NodeResponse(BaseModel):
