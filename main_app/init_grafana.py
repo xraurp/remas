@@ -24,7 +24,6 @@ def main() -> None:
     # TODO - load vars : . ./env_vars.sh
     # TODO - add email config for sending alerts
     # TODO - add prometheus to Grafana as datasource
-    # TODO - add alert evaluation group
     # TODO - change grafana docker folder permissions:
     #      $ chown 472:0 grafana-data/data
     # TODO - add function to get datasource from Grafana
