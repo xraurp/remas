@@ -24,7 +24,7 @@
                 "from": 600,
                 "to": 0
             },
-            "datasourceUid": "fehjwx75vk9hcc",
+            "datasourceUid": "eeiuprhchtekga",
             "model": {
                 "editorMode": "builder",
                 "expr": "sum by(group) (namedprocess_namegroup_memory_bytes{group=\"${node_name}\", groupname=\"${user_uid}\", memtype=~\"resident|swapped\"})",
