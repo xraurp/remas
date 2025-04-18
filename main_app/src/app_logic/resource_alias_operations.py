@@ -1,6 +1,7 @@
 from src.db.models import ResourceAlias
 from sqlmodel import select, Session
-from fastapi import HTTPException
+from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 def create_resource_alias(
     resource_alias: ResourceAlias,
@@ -10,8 +11,15 @@ def create_resource_alias(
     Creates new resource alias
     """
     resource_alias.id = None
-    db_session.add(resource_alias)
-    db_session.commit()
+    try:
+        db_session.add(resource_alias)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create resource alias in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(resource_alias)
     return resource_alias
 
@@ -51,7 +59,14 @@ def update_resource_alias(
         )
     db_resource_alias.name = resource_alias.name
     db_resource_alias.description = resource_alias.description
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update resource alias in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(db_resource_alias)
     return db_resource_alias
 

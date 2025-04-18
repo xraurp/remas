@@ -39,11 +39,6 @@ def create_user(
             detail=f"Failed to create user in database due to conflict:"
                    f"\n{e.orig.pgerror}"
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create user in database: {e}"
-        )
     db_session.refresh(user)
     # init user in Grafana (including password)
     grafana_create_or_update_user(
@@ -116,11 +111,6 @@ def update_user(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Failed to update user in database due to conflict:"
                    f"\n{e.orig.pgerror}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update user in database: {e}"
         )
     db_session.refresh(db_user)
     # update user in Grafana

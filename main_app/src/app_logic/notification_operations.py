@@ -9,8 +9,8 @@ from src.db.models import (
     TaskStatus
 )
 from sqlmodel import select, Session
-from fastapi import HTTPException
-from sqlalchemy.exc import NoResultFound
+from fastapi import HTTPException, status
+from sqlalchemy.exc import NoResultFound, IntegrityError
 from src.schemas.notification_entities import (
     AssignNotificationRequest,
     GroupNotifications
@@ -92,8 +92,15 @@ def create_notification(
         notification.owner_id = None
     else:
         notification.owner_id = current_user.user_id
-    db_session.add(notification)
-    db_session.commit()
+    try:
+        db_session.add(notification)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create notification in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(notification)
     return notification
 
@@ -215,6 +222,12 @@ def update_notification(
             update_grafana_alert_for_all_users_and_groups(
                 notification=db_notification,
                 db_session=db_session
+            )
+        if isinstance(e, IntegrityError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Failed to update notification in database due to conflict:"
+                       f"\n{e.orig.pgerror}"
             )
         raise e
     db_session.refresh(db_notification)

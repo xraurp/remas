@@ -1,7 +1,8 @@
 from src.db.models  import Resource, ResourceAlias, Unit
 from sqlmodel import select, Session
+from sqlalchemy.exc import IntegrityError
 from src.schemas.resource_entities import AliasRequest
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from src.app_logic.grafana_alert_operations import grafana_remove_alert
 
 
@@ -23,9 +24,15 @@ def create_resource(
             status_code=400,
             detail=f"Unit {resource.unit} is not supported!"
         )
-
-    db_session.add(resource)
-    db_session.commit()
+    try:
+        db_session.add(resource)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create resource in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(resource)
     return resource
 
@@ -86,7 +93,14 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
             status_code=400,
             detail=f"Unit {resource.unit} is not supported!"
         )
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update resource in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(db_resource)
     # TODO - update all Grafana alerts for resource
     # TODO - update panels for resource

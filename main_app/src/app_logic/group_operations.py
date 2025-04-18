@@ -6,7 +6,8 @@ from src.schemas.group_entities import (
 from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.authentication import insufficientPermissionsException
 from sqlmodel import select, Session
-from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException, status
 from src.app_logic.grafana_user_operations import grafana_create_or_update_user
 from src.app_logic.auxiliary_operations import (
     get_members_including_subgroups
@@ -33,8 +34,15 @@ def create_group(
                    "be used as group name!"
         )
 
-    db_session.add(group)
-    db_session.commit()
+    try:
+        db_session.add(group)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create group in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(group)
     return group
 
@@ -79,7 +87,14 @@ def update_group(group: Group, db_session: Session) -> Group:
     db_group.name = group.name
     db_group.description = group.description
     db_group.users_share_statistics = group.users_share_statistics
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update group in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(db_group)
     return db_group
 

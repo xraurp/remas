@@ -41,10 +41,10 @@ class User(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str | None = None
     surname: str | None = None
-    uid: int = Field(unique=True, index=True)
-    username: str = Field(unique=True, index=True)
+    uid: int = Field(unique=True, index=True, nullable=False)
+    username: str = Field(unique=True, index=True, nullable=False)
     password: str
-    email: str = Field(index=True)
+    email: str = Field(index=True, nullable=False)
 
     # User is by default member of group 3 ("users")
     group_id: int = Field(default=3, foreign_key="group.id")
@@ -76,7 +76,7 @@ class User(SQLModel, table=True):
 
 class Group(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(unique=True, index=True, nullable=False)
     description: str | None = None
     users_share_statistics: bool = True
 
@@ -118,7 +118,7 @@ class Node(SQLModel, table=True):
     Node is a computer in the cluster.
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(unique=True, index=True, nullable=False)
     description: str | None = None
 
     resources: list["NodeProvidesResource"] = Relationship(
@@ -163,7 +163,7 @@ class Resource(SQLModel, table=True):
     Resource is provided by a node, like CPU, RAM, GPU, etc.
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(unique=True, index=True, nullable=False)
     description: str | None = None
     unit: Unit = Unit.NONE
 
@@ -192,7 +192,7 @@ class ResourceAlias(SQLModel, table=True):
     Alias is an additional name for a resource, like "cpu" or "gpu".
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(unique=True, index=True, nullable=False)
     description: str | None = None
 
     resources: list["Resource"] = Relationship(
@@ -275,7 +275,7 @@ class Task(SQLModel, table=True):
     Task is a job that user executes on a node.
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
+    name: str = Field(index=True, nullable=False)
     description: str | None = None
     start_time: datetime = Field(index=True)
     end_time: datetime = Field(index=True)
@@ -304,7 +304,7 @@ class Task(SQLModel, table=True):
 
 class TaskTag(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
+    name: str = Field(index=True, nullable=False)
     description: str | None = None
 
     user_id: int = Field(
@@ -358,7 +358,7 @@ class Notification(SQLModel, table=True):
     Notification for time based events like task start/end or Grafana alerts.
     """
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(unique=True, index=True, nullable=False)
     description: str | None = None
     # Time offset in seconds
     time_offset: int | None = Field(default=None)

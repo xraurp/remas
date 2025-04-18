@@ -1,5 +1,6 @@
 from src.db.models import Node, NodeProvidesResource, Resource
 from sqlmodel import select, Session
+from sqlalchemy.exc import IntegrityError
 from src.schemas.node_entities import (
     NodeProvidesResourceRequest,
     NodeResponse,
@@ -9,7 +10,7 @@ from src.app_logic.grafana_alert_operations import (
     update_grafana_alert_for_all_users_and_groups,
     grafana_remove_alert_for_node
 )
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 def generate_node_response(node: Node) -> NodeResponse:
     """
@@ -42,8 +43,15 @@ def create_node(
     node.id = None
     node.resources = []
 
-    db_session.add(node)
-    db_session.commit()
+    try:
+        db_session.add(node)
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create node in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(node)
     # TODO - add node dashboard to Grafana
     return generate_node_response(node=node)
@@ -98,7 +106,14 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
     db_node.description = node.description
     # TODO - update alerts in Grafana
     # TODO - update node dashboard in Grafana
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update node in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     db_session.refresh(db_node)
     return generate_node_response(node=db_node)
 

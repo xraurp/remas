@@ -1,8 +1,8 @@
 from src.db.models import Limit, User, Group, Node, Resource
 from sqlmodel import select, Session
 from src.schemas.limit_entities import LimitRequest, LimitResponse
-from fastapi import HTTPException
-from sqlalchemy.exc import NoResultFound
+from fastapi import HTTPException, status
+from sqlalchemy.exc import NoResultFound, IntegrityError
 from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.authentication import insufficientPermissionsException
 
@@ -88,8 +88,15 @@ def add_limit(limit: LimitRequest, session: Session) -> Limit:
         resource=resource,
         nodes=nodes
     )
-    session.add(new_limit)
-    session.commit()
+    try:
+        session.add(new_limit)
+        session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to create limit in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     session.refresh(new_limit)
     return new_limit
 
@@ -123,7 +130,14 @@ def update_limit(limit: LimitRequest, session: Session) -> Limit:
     ).all()
     db_limit.nodes = nodes
     db_limit.resource = resource
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Failed to update limit in database due to conflict:"
+                   f"\n{e.orig.pgerror}"
+        )
     session.refresh(db_limit)
     return db_limit
 

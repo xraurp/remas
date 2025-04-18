@@ -1,6 +1,7 @@
 from src.db.models import TaskTag, User, Group
 from sqlmodel import select, Session
-from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException, status
 from src.app_logic.authentication import insufficientPermissionsException
 from src.schemas.authentication_entities import CurrentUserInfo
 
@@ -16,8 +17,14 @@ def create_tag(
     tag.id = None
     tag.user_id = current_user.user_id
     db_session.add(tag)
-    db_session.commit()
-    db_session.refresh(tag)
+    try:
+        db_session.commit()
+        db_session.refresh(tag)
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tag with name {tag.name} already exists!"
+        )
     return tag
 
 
@@ -58,7 +65,13 @@ def update_tag(
         raise insufficientPermissionsException
     db_tag.name = tag.name
     db_tag.description = tag.description
-    db_session.commit()
+    try:
+        db_session.commit()
+    except IntegrityError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tag with name {tag.name} already exists!"
+        )
     db_session.refresh(db_tag)
     return db_tag
 
