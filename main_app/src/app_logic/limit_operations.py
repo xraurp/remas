@@ -9,33 +9,71 @@ from src.app_logic.authentication import insufficientPermissionsException
 # TODO - when adding limit, check if node is limited by diferent
 #        limit in the same group / user
 
-def get_limits_by_user(user_id: int, session: Session) -> list[Limit]:
+def get_limit_response(limit: Limit) -> LimitResponse:
+    """
+    Returns limit response
+    """
+    return LimitResponse(
+        id=limit.id,
+        name=limit.name,
+        description=limit.description,
+        amount=limit.amount,
+        user_id=limit.user_id,
+        group_id=limit.group_id,
+        resource_id=limit.resource_id,
+        node_ids=[node.id for node in limit.nodes]
+    )
+
+def get_all_limits(session: Session) -> list[LimitResponse]:
+    """
+    Returns all limits
+    """
+    limits = session.scalars(select(Limit)).all()
+    results = []
+    for limit in limits:
+        results.append(get_limit_response(limit))
+    return results
+
+def get_limits_by_user(user_id: int, session: Session) -> list[LimitResponse]:
     """
     Returns limits by user id
     """
-    return session.scalars(select(Limit).where(Limit.user_id == user_id)).all()
+    limits = session.scalars(
+        select(Limit).where(Limit.user_id == user_id)
+    ).all()
+    results = []
+    for limit in limits:
+        results.append(get_limit_response(limit))
+    return results
 
-def get_limits_by_group(group_id: int, session: Session) -> list[Limit]:
+def get_limits_by_group(group_id: int, session: Session) -> list[LimitResponse]:
     """
     Returns limits by group id
     """
-    return session.scalars(
+    limits = session.scalars(
         select(Limit).where(Limit.group_id == group_id)
     ).all()
+    results = []
+    for limit in limits:
+        results.append(get_limit_response(limit))
+    return results
 
-def get_limit(limit_id: int, session: Session) -> Limit:
+def get_limit(limit_id: int, session: Session) -> LimitResponse:
     """
     Returns limit by id
     """
     try:
-        return session.scalars(select(Limit).where(Limit.id == limit_id)).one()
+        result = session.scalars(
+            select(Limit).where(Limit.id == limit_id)
+        ).one()
+        return get_limit_response(result)
     except NoResultFound:
         raise HTTPException(
             status_code=404,
             detail=f"Limit with id {limit_id} not found!"
         )
 
-def add_limit(limit: LimitRequest, session: Session) -> Limit:
+def add_limit(limit: LimitRequest, session: Session) -> LimitResponse:
     """
     Adds limit
     """
@@ -98,9 +136,9 @@ def add_limit(limit: LimitRequest, session: Session) -> Limit:
                    f"\n{e.orig.pgerror}"
         )
     session.refresh(new_limit)
-    return new_limit
+    return get_limit_response(limit=new_limit)
 
-def update_limit(limit: LimitRequest, session: Session) -> Limit:
+def update_limit(limit: LimitRequest, session: Session) -> LimitResponse:
     """
     Updates limit
     """
@@ -113,9 +151,44 @@ def update_limit(limit: LimitRequest, session: Session) -> Limit:
             status_code=404,
             detail=f"Limit with id {limit.id} not found!"
         )
+    
+    if not limit.user_id and not limit.group_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Limit must have either user or group specified!"
+        )
     db_limit.name = limit.name
     db_limit.description = limit.description
     db_limit.amount = limit.amount
+
+    if limit.user_id:
+        try:
+            user = session.scalars(
+                select(User).where(User.id == limit.user_id)
+            ).one()
+        except NoResultFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User with id {limit.user_id} not found!"
+            )
+        db_limit.user = user
+    else:
+        db_limit.user = None
+    
+    if limit.group_id:
+        try:
+            group = session.scalars(
+                select(Group).where(Group.id == limit.group_id)
+            ).one()
+        except NoResultFound:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Group with id {limit.group_id} not found!"
+            )
+        db_limit.group = group
+    else:
+        db_limit.group = None
+    
     try:
         resource = session.scalars(
             select(Resource).where(Resource.id == limit.resource_id)
@@ -139,7 +212,7 @@ def update_limit(limit: LimitRequest, session: Session) -> Limit:
                    f"\n{e.orig.pgerror}"
         )
     session.refresh(db_limit)
-    return db_limit
+    return get_limit_response(limit=db_limit)
 
 def remove_limit(limit_id: int, session: Session) -> None:
     """
@@ -250,15 +323,7 @@ def get_all_group_limits_list(
     limit_list = []
     for resource_id, nodes in limits.items():
         for node_id, limit in nodes.items():
-            lim_response = LimitResponse(
-                id=limit.id,
-                name=limit.name,
-                description=limit.description,
-                amount=limit.amount,
-                group=limit.group,
-                resource=limit.resource,
-                nodes=limit.nodes
-            )
+            lim_response = get_limit_response(limit=limit)
             if lim_response not in limit_list:
                 limit_list.append(lim_response)
     return limit_list
@@ -286,15 +351,7 @@ def get_all_user_limits_list(
     limit_list = []
     for resource_id, nodes in limits.items():
         for node_id, limit in nodes.items():
-            lim_response = LimitResponse(
-                id=limit.id,
-                name=limit.name,
-                description=limit.description,
-                amount=limit.amount,
-                group=limit.group,
-                resource=limit.resource,
-                nodes=limit.nodes
-            )
+            lim_response = get_limit_response(limit=limit)
             if lim_response not in limit_list:
                 limit_list.append(lim_response)
     return limit_list

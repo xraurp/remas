@@ -7,9 +7,14 @@ class LimitResponse(BaseModel):
     name: str
     description: str | None
     amount: int
-    group: Group | None
-    resource: Resource
-    nodes: list[Node]
+    user_id: int | None
+    group_id: int | None
+    resource_id: int
+    node_ids: list[int]
+    #user: UserNoPasswordSimple | None
+    #group: Group | None
+    #resource: Resource
+    #nodes: list[Node]
 
 class LimitRequest(BaseModel):
     id: int | None = None

@@ -7,7 +7,8 @@ from src.app_logic.limit_operations import (
     update_limit,
     remove_limit,
     get_all_user_limits_list,
-    get_all_group_limits_list
+    get_all_group_limits_list,
+    get_all_limits
 )
 from src.db.models import Limit
 from src.schemas.limit_entities import LimitResponse, LimitRequest
@@ -86,6 +87,16 @@ def limit_get(
     ensure_admin_permissions(current_user=current_user)
     return get_limit(limit_id=limit_id, session=session)
 
+@limit_route.get("", response_model=list[LimitResponse])
+def limit_get_all(
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[LimitResponse]:
+    """
+    Returns all limits
+    """
+    ensure_admin_permissions(current_user=current_user)
+    return get_all_limits(session=session)
 
 @limit_route.post("", response_model=LimitResponse)
 def limit_create(

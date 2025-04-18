@@ -18,12 +18,12 @@ class Settings(BaseSettings):
     # access token expiration time
     token_access_expire_minutes: int = os.environ.get(
         'TOKEN_ACCESS_EXPIRE_MINUTES',
-        1
+        30
     )
     # refresh token expiration time
     token_refresh_expire_minutes: int = os.environ.get(
         'TOKEN_REFRESH_EXPIRE_MINUTES',
-        10
+        120
     )
     # task scheduling
     # Interval in which scheduler will query tasks in advance. Larger interval
