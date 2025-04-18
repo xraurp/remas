@@ -4,13 +4,13 @@
     "orgID": 1,
     "folderUID": "",
     "ruleGroup": "Task limit alerts",
-    "title": "User ${user_name} CPU threshold on node ${node_name}",
+    "title": "User ${user_username} CPU threshold on node ${node_name}",
     "condition": "CPU Usage Treshold",
     "noDataState": "NoData",
     "execErrState": "Error",
     "for": "5m",
     "annotations": {
-        "summary": "User ${user_name} exceeded CPU limit on node ${node_name}! Maximum limit is ${allocation_amount}."
+        "summary": "User ${user_username} exceeded CPU limit on node ${node_name}! Maximum limit is ${allocation_amount}."
     },
     "labels": {},
     "isPaused": false,

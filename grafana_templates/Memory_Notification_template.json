@@ -4,14 +4,14 @@
     "orgID": 1,
     "folderUID": "",
     "ruleGroup": "Task limit alerts",
-    "title": "User ${user_name} Memory threshold on node ${node_name}",
+    "title": "User ${user_username} Memory threshold on node ${node_name}",
     "condition": "Memory treshold",
     "noDataState": "NoData",
     "execErrState": "Error",
     "for": "5m",
     "annotations": {
-        "description": "Checks memory usage for user ${user_name} on ${node_name}.",
-        "summary": "User ${user_name} exceeded Memory limit on node ${node_name}! Maximum limit is ${allocation_amount}."
+        "description": "Checks memory usage for user ${user_username} on ${node_name}.",
+        "summary": "User ${user_username} exceeded Memory limit on node ${node_name}! Maximum limit is ${allocation_amount}."
     },
     "isPaused": false,
     "notification_settings": {},
