@@ -48,3 +48,16 @@ class CreateTaskRequest(BaseModel):
     resource_allocations: list[ResourceAllocationRequest]
     start_time: datetime
     end_time: datetime
+
+class ResourceScheduleRequest(BaseModel):
+    start_time: datetime
+    end_time: datetime
+
+class ResourceAvailability(ResourceAllocationRequest):
+    # Just change the name to match the usage
+    pass
+
+class UsagePeriod(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    available_resources: list[ResourceAvailability]

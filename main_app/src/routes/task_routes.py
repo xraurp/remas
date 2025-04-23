@@ -6,13 +6,16 @@ from src.app_logic.task_operations import (
     remove_task,
     add_tag_to_task,
     remove_tag_from_task,
-    get_user_tasks
+    get_user_tasks,
+    get_resource_availability_schedule
 )
 from src.db.models import Task, TaskHasTag
 from src.schemas.task_entities import (
     TaskResponseSimple,
     TaskResponseFull,
-    CreateTaskRequest
+    CreateTaskRequest,
+    UsagePeriod,
+    ResourceScheduleRequest
 )
 from src.app_logic.authentication import ensure_admin_permissions
 from . import SessionDep, LoginDep
@@ -75,6 +78,20 @@ def task_create(
     return schedule_task(
         task=task,
         current_user=current_user,
+        db_session=session
+    )
+
+@task_route.post("/get_scheduling", response_model=list[UsagePeriod])
+def get_scheduling(
+    request: ResourceScheduleRequest,
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[UsagePeriod]:
+    """
+    Creates new task or updates existing one.
+    """
+    return get_resource_availability_schedule(
+        request=request,
         db_session=session
     )
 

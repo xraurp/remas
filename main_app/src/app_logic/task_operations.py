@@ -19,6 +19,9 @@ from src.schemas.task_entities import (
     TaskResponseFullWithOwner,
     CreateTaskRequest,
     ResourceAllocationRequest,
+    ResourceScheduleRequest,
+    UsagePeriod,
+    ResourceAvailability
 )
 from src.schemas.user_entities import UserNoPasswordSimple
 from src.app_logic.limit_operations import get_all_user_limits_dict
@@ -34,6 +37,7 @@ from src.app_logic.scheduled_event_processing import (
 )
 from fastapi import HTTPException
 from datetime import datetime
+from copy import deepcopy
 
 # TODO - add selecting by tag
 # TODO - add get statistics by tag and share resources in groups
@@ -381,6 +385,59 @@ def reschedule_task_notifications(
                 db_session=db_session
             )
 
+def get_node_resources_struct(
+    task: CreateTaskRequest
+) -> (dict[int, dict[int, int]], dict[int, dict[int, int]]):
+    """
+    Returns dictionary of required nodes and resources.
+    :param task (CreateTaskRequest): task to get resources for
+    :return (dict[int, dict[int, int]], dict[int, dict[int, int]]):
+        dictionary of required nodes and resources,
+        dictionary of node resources
+    """
+    # Structure format:
+    # {
+    #     node_id: {
+    #         resource_id: amount
+    #     }
+    # }
+    required_nodes_resources = {}
+    node_resources = {}
+    for task_ra in task.resource_allocations:
+        if task_ra.node_id not in required_nodes_resources:
+            required_nodes_resources[task_ra.node_id] = {}
+        if task_ra.node_id not in node_resources:
+            node_resources[task_ra.node_id] = {}
+        required_nodes_resources[task_ra.node_id][task_ra.resource_id] = \
+            task_ra.amount
+        node_resources[task_ra.node_id][task_ra.resource_id] = None
+    return required_nodes_resources, node_resources
+
+def get_provided_resources(
+    node_resources: dict[int, dict[int, int]],
+    db_session: Session
+) -> None:
+    """
+    Fills structure of node resources with provided resource amounts.
+    :param node_resources (dict[int, dict[int, int]]): node resources
+    :param db_session (Session): database session
+    :return (None): Modifies structure in place.
+    """
+    # Get all nodes that are required for the task
+    nodes = db_session.scalars(
+        select(Node).where(
+            Node.id.in_(
+                [node_id for node_id in node_resources.keys()]
+            )
+        )
+    ).all()
+
+    # Get amount of each required resource provided by the node
+    for node in nodes:
+        for resource in node.resources:
+            if resource.resource_id in node_resources[node.id]:
+                node_resources[node.id][resource.resource_id] = resource.amount
+
 def schedule_task(
     task: CreateTaskRequest,
     current_user: CurrentUserInfo,
@@ -437,23 +494,11 @@ def schedule_task(
             return existing_task
     else:
         existing_task = None
-
-    # Create structure of required nodes and resources
-    # {
-    #     node_id: {
-    #         resource_id: amount
-    #     }
-    # }
-    required_nodes_resources = {}
-    node_resources = {}
-    for task_ra in task.resource_allocations:
-        if task_ra.node_id not in required_nodes_resources:
-            required_nodes_resources[task_ra.node_id] = {}
-        if task_ra.node_id not in node_resources:
-            node_resources[task_ra.node_id] = {}
-        required_nodes_resources[task_ra.node_id][task_ra.resource_id] = \
-            task_ra.amount
-        node_resources[task_ra.node_id][task_ra.resource_id] = None
+    
+    # Get required nodes and resources
+    required_nodes_resources, node_resources = get_node_resources_struct(
+        task=task
+    )
     
     # Check if resource allocation does not exeeds limits
     user_limits = get_all_user_limits_dict(
@@ -465,27 +510,15 @@ def schedule_task(
         required_nodes_resources=required_nodes_resources
     )
 
-    # Get all nodes that are required for the task
-    nodes = db_session.scalars(
-        select(Node).where(
-            Node.id.in_(
-                [task_ra.node_id for task_ra in task.resource_allocations]
-            )
-        )
-    ).all()
-
-    # Get amount of each required resource provided by the node
-    for node in nodes:
-        for resource in node.resources:
-            if resource.resource_id in required_nodes_resources[node.id]:
-                node_resources[node.id][resource.resource_id] = resource.amount
+    # Get provided resource amounts
+    get_provided_resources(node_resources=node_resources, db_session=db_session)
     
     # Find overlapping tasks (excluding current task)
     overlapping_tasks = db_session.scalars(
         select(Task).with_for_update().where(
             Task.status.in_([TaskStatus.scheduled, TaskStatus.running]),
-            Task.start_time <= task.end_time,
-            Task.end_time >= task.start_time
+            Task.start_time < task.end_time,
+            Task.end_time > task.start_time
         ).where(
             Task.id != (existing_task.id if existing_task else None)
         ).order_by(Task.start_time)
@@ -673,3 +706,209 @@ def remove_tag_from_task(
             status_code=404,
             detail="Tag is not assigned to the task!"
         )
+
+def get_node_resources_struct_for_multiple_tasks(
+    tasks: list[Task]
+) -> dict[int, dict[int, int]]:
+    """
+    Returns node resources struct for multiple tasks
+    :param tasks (list[Task]): list of tasks
+    """
+    node_resources = {}
+    for task in tasks:
+        for ra in task.resource_allocations:
+            if ra.node_id not in node_resources:
+                node_resources[ra.node_id] = {}
+            if ra.resource_id not in node_resources[ra.node_id]:
+                node_resources[ra.node_id][ra.resource_id] = 0
+    return node_resources
+
+def check_same_time_event(
+    time: datetime,
+    tasks: list[Task],
+    ending_tasks: list[Task]
+) -> bool:
+    """
+    Check if the next task start/ends in the same time.
+    :param time (datetime): time to check
+    :param tasks (list[Task]): list of tasks
+    :param ending_tasks (list[Task]): list of ending tasks
+    :return (bool): True if same time, False otherwise
+    """
+    if len(tasks) > 0 and tasks[0].start_time == time:
+        return True
+    if len(ending_tasks) > 0 and ending_tasks[0].end_time == time:
+        return True
+    return False
+
+def check_no_resource_usage(
+    required_nodes_resources: dict[int, dict[int, int]]
+) -> bool:
+    """
+    Checks if there is any resource usage
+    :param required_nodes_resources (dict[int, dict[int, int]]): dictionary of 
+        required nodes and resources
+    :return (bool): True if no resource usage, False otherwise
+    """
+    for node_id, resources in required_nodes_resources.items():
+        for resource_id, amount in resources.items():
+            if amount != 0:
+                return False
+    return True
+
+def get_available_resources(
+    required_nodes_resources: dict[int, dict[int, int]],
+    provided_node_resources: dict[int, dict[int, int]]
+) -> list[ResourceAvailability]:
+    """
+    Returns list of available resources
+    :param required_nodes_resources (dict[int, dict[int, int]]): dictionary of 
+        required nodes and resources
+    :param provided_node_resources (dict[int, dict[int, int]]): dictionary of 
+        provided nodes and resources
+    :return (list[ResourceAvailability]): list of available resources
+    """
+    available_resources = []
+    for node_id, resources in required_nodes_resources.items():
+        for resource_id, amount in resources.items():
+            if amount != 0:
+                aa = provided_node_resources[node_id][resource_id] - amount
+                available_resources.append(
+                    ResourceAvailability(
+                        node_id=node_id,
+                        resource_id=resource_id,
+                        amount=aa
+                    )
+                )
+    return available_resources
+
+def get_period_end_time(
+    tasks: list[Task],
+    ending_tasks: list[Task]
+) -> datetime | None:
+    """
+    Returns period end time
+    :param tasks (list[Task]): list of tasks
+    :param ending_tasks (list[Task]): list of ending tasks
+    :return (datetime | None): period end time
+    """
+    if len(tasks) > 0 and len(ending_tasks) > 0:
+        return min(tasks[0].start_time, ending_tasks[0].end_time)
+    if len(tasks) > 0:
+        return tasks[0].start_time
+    if len(ending_tasks) > 0:
+        return ending_tasks[0].end_time
+    return None
+
+def get_resource_availability_schedule(
+    request: ResourceScheduleRequest,
+    db_session: Session
+) -> list[UsagePeriod]:
+    """
+    Returns resource availability schedule
+    :param request (ResourceScheduleRequest): request with start and end time
+    :param db_session (Session): database session to use
+    :return (list[UsagePeriod]): list of usage periods
+    """
+    # Query tasks for given time range
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.status.in_([TaskStatus.scheduled, TaskStatus.running]),
+            Task.start_time <= request.end_time,
+            Task.end_time >= request.start_time
+        ).order_by(Task.start_time)
+    ).all()
+    ending_tasks = [o for o in tasks]
+    ending_tasks.sort(key=lambda o: o.end_time)
+
+    available_resources_timeline: list[UsagePeriod] = []
+    current_period = None
+
+    # Get required and provided node resources data structure
+    required_nodes_resources = get_node_resources_struct_for_multiple_tasks(
+        tasks=tasks
+    )
+    # Copy structure
+    provided_node_resources = deepcopy(required_nodes_resources)
+    # Get provided node resources amounts
+    get_provided_resources(
+        node_resources=provided_node_resources,
+        db_session=db_session
+    )
+    
+    is_starting_task = False
+
+    # Create availability timeline
+    while len(ending_tasks):
+        # Get ending task data
+        if len(tasks) == 0 \
+        or ending_tasks[0].end_time < tasks[0].start_time:
+            current_task = ending_tasks.pop(0)
+            current_time = current_task.end_time
+            is_starting_task = False
+        
+        # Get starting task data
+        else:
+            current_task = tasks.pop(0)
+            current_time = current_task.start_time
+            is_starting_task = True
+        
+        # Add / remove required resources for current task based on 
+        # whether it is starting or ending
+        modify_required_resources(
+            required_nodes_resources=required_nodes_resources,
+            task=current_task,
+            add=is_starting_task
+        )
+
+        # Check if next task starts/ends at the same time and continue
+        # with next iteration if it does        
+        if check_same_time_event(
+            time=current_time,
+            tasks=tasks,
+            ending_tasks=ending_tasks
+        ):
+            continue
+        
+        available_resources = get_available_resources(
+            required_nodes_resources=required_nodes_resources,
+            provided_node_resources=provided_node_resources
+        )
+        # Check no resource usage (no resources are reported when none are used)
+        if not available_resources:
+            continue
+
+        # Get period end time
+        period_end_time = get_period_end_time(
+            tasks=tasks,
+            ending_tasks=ending_tasks
+        )
+        # No period end time == this is the last period
+        # data were processed in previous iteration
+        if not period_end_time:
+            continue
+
+        # Create resource snapshot for given time period
+        current_period = UsagePeriod(
+            start_time=current_time,
+            end_time=period_end_time,
+            available_resources=available_resources
+        )
+        available_resources_timeline.append(current_period)
+    
+    # merge consecutive periods with same available resources
+    i = 0
+    while i < len(available_resources_timeline):
+        if i+1 >= len(available_resources_timeline):
+            break
+
+        curent = available_resources_timeline[i]
+        next = available_resources_timeline[i+1]
+
+        if curent.available_resources == next.available_resources:
+            curent.end_time = next.end_time
+            available_resources_timeline.pop(i+1)
+        else:
+            i += 1
+    
+    return available_resources_timeline
