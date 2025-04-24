@@ -491,7 +491,7 @@ def schedule_task(
             )
             db_session.commit()
             db_session.refresh(existing_task)
-            return existing_task
+            return generate_task_response_full(task=existing_task)
     else:
         existing_task = None
     
