@@ -10,7 +10,7 @@ from src.db.models import (
     Limit,
     User
 )
-from sqlmodel import select, Session
+from sqlmodel import select, Session, asc, desc
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from src.schemas.task_entities import (
     TaskResponseFull,
@@ -21,7 +21,8 @@ from src.schemas.task_entities import (
     ResourceAllocationRequest,
     ResourceScheduleRequest,
     UsagePeriod,
-    ResourceAvailability
+    ResourceAvailability,
+    TasksPaginationRequest
 )
 from src.schemas.user_entities import UserNoPasswordSimple
 from src.app_logic.limit_operations import get_all_user_limits_dict
@@ -107,6 +108,107 @@ def get_user_tasks(
         for task in db_session.scalars(
             select(Task).where(Task.owner_id == user_id)
         ).all()
+    ]
+
+def get_active_tasks(
+    user_id: int,
+    pagination: TasksPaginationRequest,
+    db_session: Session
+) -> list[TaskResponseFullWithOwner]:
+    """
+    Returns scheduled and running tasks owned by specified user.
+    """
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.status.in_([TaskStatus.SCHEDULED, TaskStatus.RUNNING])
+        ).order_by(
+            asc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
+        )
+    ).all()
+    return [
+        generate_task_response_full_with_owner(task=task)
+        for task in tasks
+    ]
+
+def get_finished_tasks(
+    pagination: TasksPaginationRequest,
+    db_session: Session
+) -> list[TaskResponseFullWithOwner]:
+    """
+    Returns finished tasks owned by specified user.
+    """
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.status == TaskStatus.FINISHED
+        ).order_by(
+            desc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
+        )
+    ).all()
+    return [
+        generate_task_response_full_with_owner(task=task)
+        for task in tasks
+    ]
+
+def get_active_tasks_for_user(
+    user_id: int,
+    pagination: TasksPaginationRequest,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> list[TaskResponseFull]:
+    """
+    Returns scheduled and running tasks owned by specified user.
+    """
+    if not current_user.is_admin:
+        if current_user.user_id != user_id:
+            raise insufficientPermissionsException
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.owner_id == user_id,
+            Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
+        ).order_by(
+            asc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
+        )
+    ).all()
+    return [
+        generate_task_response_full(task=task)
+        for task in tasks
+    ]
+
+def get_finished_tasks_for_user(
+    user_id: int,
+    pagination: TasksPaginationRequest,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> list[TaskResponseFull]:
+    """
+    Returns finished tasks owned by specified user.
+    """
+    if not current_user.is_admin:
+        if current_user.user_id != user_id:
+            raise insufficientPermissionsException
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.owner_id == user_id,
+            Task.status == TaskStatus.finished
+        ).order_by(
+            desc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
+        )
+    ).all()
+    return [
+        generate_task_response_full(task=task)
+        for task in tasks
     ]
 
 def get_task(
@@ -816,6 +918,10 @@ def get_resource_availability_schedule(
             Task.status.in_([TaskStatus.scheduled, TaskStatus.running]),
             Task.start_time <= request.end_time,
             Task.end_time >= request.start_time
+        ).where(
+            # skip task itself to prevent showing its own resources
+            # as unavailable (set to None in request to include all tasks)
+            Task.id != request.exclude_task_id
         ).order_by(Task.start_time)
     ).all()
     ending_tasks = [o for o in tasks]

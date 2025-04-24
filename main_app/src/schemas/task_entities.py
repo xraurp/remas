@@ -52,6 +52,7 @@ class CreateTaskRequest(BaseModel):
 class ResourceScheduleRequest(BaseModel):
     start_time: datetime
     end_time: datetime
+    exclude_task_id: int | None = None
 
 class ResourceAvailability(ResourceAllocationRequest):
     # Just change the name to match the usage
@@ -61,3 +62,7 @@ class UsagePeriod(BaseModel):
     start_time: datetime
     end_time: datetime
     available_resources: list[ResourceAvailability]
+
+class TasksPaginationRequest(BaseModel):
+    page_number: int
+    page_size: int

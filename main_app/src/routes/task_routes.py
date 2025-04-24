@@ -7,7 +7,11 @@ from src.app_logic.task_operations import (
     add_tag_to_task,
     remove_tag_from_task,
     get_user_tasks,
-    get_resource_availability_schedule
+    get_resource_availability_schedule,
+    get_active_tasks,
+    get_finished_tasks,
+    get_active_tasks_for_user,
+    get_finished_tasks_for_user
 )
 from src.db.models import Task, TaskHasTag
 from src.schemas.task_entities import (
@@ -15,7 +19,9 @@ from src.schemas.task_entities import (
     TaskResponseFull,
     CreateTaskRequest,
     UsagePeriod,
-    ResourceScheduleRequest
+    ResourceScheduleRequest,
+    TaskResponseFullWithOwner,
+    TasksPaginationRequest
 )
 from src.app_logic.authentication import ensure_admin_permissions
 from . import SessionDep, LoginDep
@@ -48,6 +54,71 @@ def tasks_get_by_user(
     return get_user_tasks(
         user_id=user_id,
         current_user=current_user,
+        db_session=session
+    )
+
+@task_route.post("/user/{user_id}/active", response_model=list[TaskResponseFull])
+def tasks_get_active_by_user(
+    user_id: int,
+    pagination: TasksPaginationRequest,
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[TaskResponseFull]:
+    """
+    Returns active tasks owned by user.
+    """
+    return get_active_tasks_for_user(
+        user_id=user_id,
+        pagination=pagination,
+        current_user=current_user,
+        db_session=session
+    )
+
+@task_route.post("/user/{user_id}/finished", response_model=list[TaskResponseFull])
+def tasks_get_finished_by_user(
+    user_id: int,
+    pagination: TasksPaginationRequest,
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[TaskResponseFull]:
+    """
+    Returns finished tasks owned by user.
+    """
+    print('user_id', user_id)
+    return get_finished_tasks_for_user(
+        user_id=user_id,
+        pagination=pagination,
+        current_user=current_user,
+        db_session=session
+    )
+
+@task_route.post("/finished", response_model=list[TaskResponseFullWithOwner])
+def tasks_get_finished(
+    pagination: TasksPaginationRequest,
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[TaskResponseFull]:
+    """
+    Returns finished tasks owned by user.
+    """
+    ensure_admin_permissions(current_user=current_user)
+    return get_finished_tasks(
+        pagination=pagination,
+        db_session=session
+    )
+
+@task_route.post("/active", response_model=list[TaskResponseFullWithOwner])
+def tasks_get_active(
+    pagination: TasksPaginationRequest,
+    current_user: LoginDep,
+    session: SessionDep
+) -> list[TaskResponseFull]:
+    """
+    Returns active tasks owned by user.
+    """
+    ensure_admin_permissions(current_user=current_user)
+    return get_active_tasks(
+        pagination=pagination,
         db_session=session
     )
 
