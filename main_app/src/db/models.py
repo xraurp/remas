@@ -44,7 +44,7 @@ class User(SQLModel, table=True):
     uid: int = Field(unique=True, index=True, nullable=False)
     username: str = Field(unique=True, index=True, nullable=False)
     password: str
-    email: str = Field(index=True, nullable=False)
+    email: str = Field(index=True, nullable=False)  # TODO - add unique (required by Grafana)
 
     # User is by default member of group 3 ("users")
     group_id: int = Field(default=3, foreign_key="group.id")
