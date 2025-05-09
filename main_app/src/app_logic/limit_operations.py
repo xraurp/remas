@@ -230,12 +230,56 @@ def remove_limit(limit_id: int, session: Session) -> None:
     session.delete(limit)
     session.commit()
 
+def get_limit_dict(entity_limits: list[Limit]) -> dict[int, dict[int, Limit]]:
+    """
+    Returns most restrictive limits from the list.
+    :param entity_limits (list[Limit]): list of limits for group or user
+    :return (dict[int, dict[int, Limit]]): limits addressed by resource and node
+    """
+    limits = {}
+    for limit in entity_limits:
+        for node in limit.nodes:
+            if limit.resource_id not in limits:
+                limits[limit.resource_id] = {}
+            for node in limit.nodes:
+                # if there are multiple limits for the same resource and node
+                # only the most restrictive limit applies
+                if node.id in limits[limit.resource_id]:
+                    if limits[limit.resource_id][node.id].amount < limit.amount:
+                        limits[limit.resource_id][node.id] = limit
+                else:
+                    limits[limit.resource_id][node.id] = limit
+    return limits
+
+def merge_limit_dicts(
+    parent_limits: dict[int, dict[int, Limit]],
+    child_limits: dict[int, dict[int, Limit]]
+) -> dict[int, dict[int, Limit]]:
+    """
+    Merges two limit dicts. Child limits take priority over parent.
+    :param parent_limits (dict[int, dict[int, Limit]]): parent limits
+    :param child_limits (dict[int, dict[int, Limit]]): child limits
+    :return (dict[int, dict[int, Limit]]): merged limits
+    """
+    if not parent_limits:
+        return child_limits
+    
+    for resource_id in child_limits:
+        for node_id in child_limits[resource_id]:
+            if resource_id not in parent_limits:
+                parent_limits[resource_id] = {}
+            parent_limits[resource_id][node_id] = child_limits[resource_id][node_id]
+    return parent_limits
+
 def get_all_group_limits_dict(
     group_id: int,
     session: Session
 ) -> dict[int, dict[int, Limit]]:
     """
-    Returns all group limits
+    Returns all effective group limits. Effective limits are limits that are not
+    overriden by another from subgroup. (Limit in child takes priority over
+    parent. If there are two limits for the same resource and node in child
+    the most restrictive limit applies.)
     :param group_id (int): group id
     :param session (Session): database session
     :return (dict[int, dict[int, Limit]]): group limits by resource
@@ -249,29 +293,28 @@ def get_all_group_limits_dict(
         )
 
     if group.parent_id:
-        limits = get_all_group_limits_dict(
+        parent_limits = get_all_group_limits_dict(
             group_id=group.parent_id,
             session=session
         )
     else:
-        limits = {}
+        parent_limits = {}
 
-    for limit in group.limits:
-        for node in limit.nodes:
-            if limit.resource_id not in limits:
-                limits[limit.resource_id] = {}
-            for node in limit.nodes:
-                limits[limit.resource_id][node.id] = limit
-
-    return limits
-
+    limits = get_limit_dict(entity_limits=group.limits)
+    return merge_limit_dicts(
+        parent_limits=parent_limits,
+        child_limits=limits
+    )
 
 def get_all_user_limits_dict(
     user_id: int,
     session: Session
 ) -> dict[int, dict[int, Limit]]:
     """
-    Returns all user limits
+    Returns all effective user limits. Effective limits are limits that are not
+    overriden by another from group. (Limit in user takes priority over
+    group. If there are two limits for the same resource and node in user
+    the most restrictive limit applies.)
     :param user_id (int): user id
     :param session (Session): database session
     :return (dict[int, dict[int, Limit]]): user limits by resource
@@ -284,19 +327,16 @@ def get_all_user_limits_dict(
             detail=f"User with id {user_id} not found!"
         )
     
-    limits = get_all_group_limits_dict(
+    group_limits = get_all_group_limits_dict(
         group_id=user.group_id,
         session=session
     )
 
-    for limit in user.limits:
-        for node in limit.nodes:
-            if limit.resource_id not in limits:
-                limits[limit.resource_id] = {}
-            for node in limit.nodes:
-                limits[limit.resource_id][node.id] = limit
-
-    return limits
+    limits = get_limit_dict(entity_limits=user.limits)
+    return merge_limit_dicts(
+        parent_limits=group_limits,
+        child_limits=limits
+    )
 
 def get_all_group_limits_list(
     group_id: int,
