@@ -51,6 +51,28 @@ def get_notification(notification_id: int, db_session: Session) -> Notification:
             detail=f"Notification with id {notification_id} not found!"
         )
 
+def get_notifications_by_owner(
+    owner_id: int,
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> list[Notification]:
+    """
+    Returns notifications by owner id
+    """
+    if not current_user.is_admin and current_user.user_id != owner_id:
+        raise insufficientPermissionsException
+    
+    user = db_session.get(User, owner_id)
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"User with id {owner_id} not found!"
+        )
+
+    return db_session.scalars(
+        select(Notification).where(Notification.owner_id == owner_id)
+    ).all()
+
 def create_notification(
     notification: Notification,
     current_user: CurrentUserInfo,

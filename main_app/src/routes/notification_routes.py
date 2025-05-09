@@ -7,7 +7,8 @@ from src.app_logic.notification_operations import (
     update_notification,
     assign_or_unassign_notification,
     get_notifications_by_group_id,
-    get_notifications_by_user_id
+    get_notifications_by_user_id,
+    get_notifications_by_owner
 )
 from src.schemas.notification_entities import (
     AssignNotificationRequest,
@@ -158,6 +159,24 @@ def notification_get_by_user_id(
     """
     return get_notifications_by_user_id(
         user_id=user_id,
+        current_user=current_user,
+        db_session=db_session
+    )
+
+@notification_route.get(
+    "/owner/{owner_id}",
+    response_model=list[Notification]
+)
+def notification_get_by_owner(
+    owner_id: int,
+    current_user: LoginDep,
+    db_session: SessionDep
+) -> list[GroupNotifications]:
+    """
+    Returns notifications by owner id
+    """
+    return get_notifications_by_owner(
+        owner_id=owner_id,
         current_user=current_user,
         db_session=db_session
     )
