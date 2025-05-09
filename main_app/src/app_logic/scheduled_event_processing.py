@@ -107,6 +107,8 @@ def process_scheduled_events(db_session: Session) -> None:
 
     # list of users that needs change of alerts in grafana
     afected_users = []
+    # list of events that were processed and can be removed from database
+    processed_events = []
 
     for event in events:
         savepoint = db_session.begin_nested()
@@ -115,14 +117,18 @@ def process_scheduled_events(db_session: Session) -> None:
         if event.type in [EventType.task_start, EventType.task_end]:
             # update task status
             task = event.task
-            if event.type == EventType.task_start:
+            if event.type == EventType.task_start \
+            and task.start_time <= timepoint: # check if task wasn't rescheduled
                 task.status = TaskStatus.running
                 if task.owner not in afected_users:
                     afected_users.append(task.owner)
-            elif event.type == EventType.task_end:
+                processed_events.append(event)
+            elif event.type == EventType.task_end \
+            and task.end_time <= timepoint: # check if task wasn't rescheduled
                 task.status = TaskStatus.finished
                 if task.owner not in afected_users:
                     afected_users.append(task.owner)
+                processed_events.append(event)
         
         # user notification event
         elif event.type == EventType.other:
@@ -145,7 +151,7 @@ def process_scheduled_events(db_session: Session) -> None:
         )
 
         # remove events for afected users after alerts have been updated
-        for event in events:
+        for event in processed_events:
             if event.task.owner == user:
                 db_session.delete(event)
             
