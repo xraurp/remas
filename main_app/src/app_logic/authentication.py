@@ -257,6 +257,10 @@ def change_user_password(
     :param current_user (CurrentUserInfo): currently logged in user info
     :param db_session (Session): database session to use
     """
+    if get_settings().debug:
+        logging.debug(f'Changing password for user {current_user.username}')
+        logging.debug(f'Old password: {request.old_password}')
+        logging.debug(f'New password: {request.new_password}')
     user = authenticate_user(
         username=current_user.username,
         password=request.old_password,
