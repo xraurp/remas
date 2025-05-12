@@ -5,7 +5,7 @@
     "folderUID": "",
     "ruleGroup": "Task limit alerts",
     "title": "User ${user_username} CPU threshold on node ${node_name}",
-    "condition": "CPU Usage Treshold",
+    "condition": "CPU Usage Threshold",
     "noDataState": "NoData",
     "execErrState": "Error",
     "for": "5m",
@@ -24,11 +24,11 @@
                 "from": 600,
                 "to": 0
             },
-            "datasourceUid": "eeiuprhchtekga",
+            "datasourceUid": "aejzco4xpvcw0b",
             "model": {
                 "disableTextWrap": false,
                 "editorMode": "builder",
-                "expr": "sum by(group) (rate(namedprocess_namegroup_cpu_seconds_total{group=\"${node_name}\", groupname=\"${user_uid}\"}[1m]))",
+                "expr": "sum by(node) (rate(namedprocess_namegroup_cpu_seconds_total{node=\"${node_name}\", groupname=\"${user_uid}\"}[1m]))",
                 "fullMetaSearch": false,
                 "includeNullMetadata": false,
                 "instant": true,
@@ -41,7 +41,7 @@
             }
         },
         {
-            "refId": "CPU Usage Treshold",
+            "refId": "CPU Usage Threshold",
             "queryType": "",
             "relativeTimeRange": {
                 "from": 0,
@@ -75,7 +75,7 @@
                 "expression": "CPU Usage",
                 "intervalMs": 1000,
                 "maxDataPoints": 43200,
-                "refId": "CPU Usage Treshold",
+                "refId": "CPU Usage Threshold",
                 "type": "threshold"
             }
         }

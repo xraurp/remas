@@ -14,10 +14,10 @@
                 "from": 600,
                 "to": 0
             },
-            "datasourceUid": "eeiuprhchtekga",
+            "datasourceUid": "aejzco4xpvcw0b",
             "model": {
                 "editorMode": "builder",
-                "expr": "sum by(group) (namedprocess_namegroup_memory_bytes{group=\"localhost\", groupname=\"1000\", memtype=~\"resident|swapped\"})",
+                "expr": "sum by(node) (namedprocess_namegroup_memory_bytes{node=\"${node_name}\", groupname=\"${user_uid}\", memtype=~\"resident|swapped\"})",
                 "instant": true,
                 "intervalMs": 1000,
                 "legendFormat": "__auto",
