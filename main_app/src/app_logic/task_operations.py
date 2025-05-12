@@ -111,7 +111,6 @@ def get_user_tasks(
     ]
 
 def get_active_tasks(
-    user_id: int,
     pagination: TasksPaginationRequest,
     db_session: Session
 ) -> list[TaskResponseFullWithOwner]:
@@ -120,7 +119,7 @@ def get_active_tasks(
     """
     tasks = db_session.scalars(
         select(Task).where(
-            Task.status.in_([TaskStatus.SCHEDULED, TaskStatus.RUNNING])
+            Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
         ).order_by(
             asc(Task.start_time)
         ).slice(
@@ -142,7 +141,7 @@ def get_finished_tasks(
     """
     tasks = db_session.scalars(
         select(Task).where(
-            Task.status == TaskStatus.FINISHED
+            Task.status == TaskStatus.finished
         ).order_by(
             desc(Task.start_time)
         ).slice(
