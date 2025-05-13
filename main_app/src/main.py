@@ -45,6 +45,13 @@ app = FastAPI(lifespan=lifespan)
 async def root():
     return {"message": "Hello World"}
 
+@app.get('/grafana-link')
+async def get_grafana_link():
+    link = get_settings().grafana_url
+    return {
+        'detail': link
+    }
+
 app.include_router(user_route)
 app.include_router(group_route)
 app.include_router(node_route)
