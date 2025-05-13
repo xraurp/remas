@@ -16,7 +16,6 @@ from typing import Annotated
 import bcrypt
 import logging
 from src.app_logic.grafana_user_operations import (
-    grafana_create_or_update_user,
     grafana_change_user_password
 )
 from src.app_logic.auxiliary_operations import is_admin

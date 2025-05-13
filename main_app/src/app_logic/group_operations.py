@@ -9,6 +9,7 @@ from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from src.app_logic.grafana_user_operations import grafana_create_or_update_user
+from src.app_logic.grafana_alert_operations import get_alert_error
 from src.app_logic.auxiliary_operations import (
     get_members_including_subgroups
 )

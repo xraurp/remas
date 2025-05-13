@@ -15,7 +15,8 @@ from src.app_logic.grafana_general_operations import (
 )
 from src.app_logic.grafana_alert_operations import (
     grafana_add_or_update_user_alerts,
-    grafana_remove_all_user_alerts
+    grafana_remove_all_user_alerts,
+    get_alert_error
 )
 
 
@@ -218,12 +219,13 @@ def grafana_create_or_update_user(
     user: User,
     db_session: Session,
     password: str | None = None
-) -> None:
+) -> list[HTTPException]:
     """
     Creates Grafana user or updates existing user.
     :param user (User): user to create Grafana user for
     :param db_session (Session): database session to use
     :param password (str): password for Grafana user
+    :return (list[HTTPException]): list of errors if some alerts failed
     """
     ### Crate user in grafana
     user_data = {
@@ -306,7 +308,9 @@ def grafana_create_or_update_user(
     grafana_add_or_update_user_folders(user=user, user_grafana_id=grafana_user_id)
 
     ### Create default user alerts
-    grafana_add_or_update_user_alerts(user=user, db_session=db_session)
+    errors = grafana_add_or_update_user_alerts(user=user, db_session=db_session)
+    
+    return errors
 
 def grafana_remove_user(user: User) -> None:
     """

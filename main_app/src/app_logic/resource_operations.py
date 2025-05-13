@@ -3,7 +3,10 @@ from sqlmodel import select, Session
 from sqlalchemy.exc import IntegrityError
 from src.schemas.resource_entities import AliasRequest
 from fastapi import HTTPException, status
-from src.app_logic.grafana_alert_operations import grafana_remove_alert
+from src.app_logic.grafana_alert_operations import (
+    grafana_remove_alert,
+    update_grafana_alert_for_all_users_and_groups
+)
 
 
 def create_resource(
@@ -52,7 +55,6 @@ def delete_resource(resource_id: int, db_session: Session) -> None:
     # remove Grafana alerts
     for notification in resource.notifications:
         grafana_remove_alert(notification=notification)
-    # TODO - remove resource dashboard from Grafana
     db_session.delete(resource)
     db_session.commit()
 
@@ -102,8 +104,12 @@ def update_resource(resource: Resource, db_session: Session) -> Resource:
                    f"\n{e.orig.pgerror}"
         )
     db_session.refresh(db_resource)
-    # TODO - update all Grafana alerts for resource
-    # TODO - update panels for resource
+    # update all Grafana alerts for resource
+    for notification in resource.notifications:
+        update_grafana_alert_for_all_users_and_groups(
+            notification=notification,
+            db_session=db_session
+        )
     return db_resource
 
 def add_resource_alias(

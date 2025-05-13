@@ -143,12 +143,18 @@ def process_scheduled_events(db_session: Session) -> None:
         savepoint = db_session.begin_nested()
 
         # update grafana alerts for afected users (task owners)
-        grafana_add_or_update_user_alerts(
+        errors = grafana_add_or_update_user_alerts(
             user=user,
             timepoint=timepoint,
             db_session=db_session,
             lock_rows=True
         )
+
+        if errors:
+            logging.error(
+                f"Errors has occured when updating"
+                f" grafana alerts for user {user.username}!"
+            )
 
         # remove events for afected users after alerts have been updated
         for event in processed_events:

@@ -53,7 +53,6 @@ def create_node(
                    f"\n{e.orig.pgerror}"
         )
     db_session.refresh(node)
-    # TODO - add node dashboard to Grafana
     return generate_node_response(node=node)
 
 def delete_node(node_id: int, db_session: Session) -> None:
@@ -74,7 +73,6 @@ def delete_node(node_id: int, db_session: Session) -> None:
                 node=node,
                 notification=notification
             )
-    # TODO - remove node dashboard from Grafana
     db_session.delete(node)
     db_session.commit()
 
@@ -104,8 +102,6 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
         )
     db_node.name = node.name
     db_node.description = node.description
-    # TODO - update alerts in Grafana
-    # TODO - update node dashboard in Grafana
     try:
         db_session.commit()
     except IntegrityError as e:
@@ -115,6 +111,14 @@ def update_node(node: Node, db_session: Session) -> NodeResponse:
                    f"\n{e.orig.pgerror}"
         )
     db_session.refresh(db_node)
+    # update Grafana alerts with new info
+    for npr in db_node.resources:
+        resource = npr.resource
+        for notification in resource.notifications:
+            update_grafana_alert_for_all_users_and_groups(
+                notification=notification,
+                db_session=db_session
+            )
     return generate_node_response(node=db_node)
 
 def add_resource_to_node(
@@ -158,7 +162,6 @@ def add_resource_to_node(
             notification=notification,
             db_session=db_session
         )
-    # TODO - add resource panels to node dashboard
     return generate_node_response(node=node)
 
 def remove_resource_from_node(
@@ -199,5 +202,4 @@ def remove_resource_from_node(
             node=node,
             notification=notification
         )
-    # TODO - remove resource panels to node dashboard
     return generate_node_response(node=node)

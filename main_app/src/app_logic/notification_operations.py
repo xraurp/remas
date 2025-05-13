@@ -28,8 +28,10 @@ from src.app_logic.grafana_alert_operations import (
     update_grafana_alert_for_all_users_and_groups,
     grafana_remove_alert_for_group,
     grafana_add_alert_to_user,
-    grafana_add_alert_to_group
+    grafana_add_alert_to_group,
+    get_alert_error
 )
+from copy import deepcopy
 
 def get_all_notifications(db_session: Session) -> list[Notification]:
     """
@@ -187,6 +189,10 @@ def update_notification(
             detail=f"Can't update notification owned by another user!"
         )
     
+    # create copy of original notification to rollback
+    # if grafana alert update fails
+    original_notification = deepcopy(db_notification)
+    
     # Fix notification type
     notification.type = NotificationType(notification.type)
     
@@ -255,10 +261,27 @@ def update_notification(
     db_session.refresh(db_notification)
     # check if notification is grafana alert and update it in grafana
     if is_grafana_alert(db_notification):
-        update_grafana_alert_for_all_users_and_groups(
+        e = update_grafana_alert_for_all_users_and_groups(
             notification=db_notification,
             db_session=db_session
         )
+        error = get_alert_error(e)
+        if error:
+            # rollback changes
+            db_notification.name = original_notification.name
+            db_notification.description = original_notification.description
+            db_notification.type = original_notification.type
+            db_notification.notification_template = \
+                original_notification.notification_template
+            db_notification.default_amount = original_notification.default_amount
+            db_notification.resource_id = original_notification.resource_id
+            db_session.add(db_notification)
+            db_session.commit()
+            update_grafana_alert_for_all_users_and_groups(
+                notification=db_notification,
+                db_session=db_session
+            )
+            raise error
     # reschedule notification after update
     if remove_scheudling:
         remove_notification_scheduling_for_all(
@@ -388,11 +411,23 @@ def assign_or_unassign_notification(
                 db_session=db_session
             )
             if is_grafana_alert(db_notification):
-                grafana_add_alert_to_user(
+                e = grafana_add_alert_to_user(
                     user=user,
                     notification=db_notification,
                     db_session=db_session
                 )
+                error = get_alert_error(e)
+                if error:
+                    # rollback on error
+                    db_session.refresh(db_notification)
+                    db_notification.receivers_users.remove(user)
+                    db_session.commit()
+                    grafana_remove_alert_from_user(
+                        user=user,
+                        notification=db_notification,
+                        db_session=db_session
+                    )
+                    raise error
         if group and group not in db_notification.receivers_groups:
             db_notification.receivers_groups.append(group)
             db_session.commit()
@@ -402,11 +437,23 @@ def assign_or_unassign_notification(
                 db_session=db_session
             )
             if is_grafana_alert(db_notification):
-                grafana_add_alert_to_group(
+                e = grafana_add_alert_to_group(
                     group=group,
                     notification=db_notification,
                     db_session=db_session
                 )
+                error = get_alert_error(e)
+                if error:
+                    # rollback on error
+                    db_session.refresh(db_notification)
+                    db_notification.receivers_groups.remove(group)
+                    db_session.commit()
+                    grafana_remove_alert_for_group(
+                        group=group,
+                        notification=db_notification,
+                        db_session=db_session
+                    )
+                    raise error
     
     db_session.commit()
     db_session.refresh(db_notification)

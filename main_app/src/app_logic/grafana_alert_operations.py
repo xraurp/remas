@@ -28,6 +28,7 @@ from src.app_logic.auxiliary_operations import (
     get_members_including_subgroups
 )
 from src.config import get_settings
+import logging
 
 def grafana_add_or_update_alert_rule(
     user: User,
@@ -105,7 +106,15 @@ def grafana_add_or_update_alert_rule(
         resource_amount = resource_amount,
         allocation_amount = amount
     )
-    config = json.loads(config)
+    try:
+        config = json.loads(config)
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to create alert {notification.name} "
+                   f"for user {user.username} in Grafana! "
+                    "Wrong notification template syntax!"
+        )
 
     if notification.owner:
         owner = notification.owner.username
@@ -158,14 +167,14 @@ def grafana_add_or_update_alert_rule(
         if existing_alert:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to create alert for user {user.username} in "
-                        "Grafana!"
+                detail=f"Failed to create alert {notification.name} "
+                       f"for user {user.username} in Grafana!"
             )
         else:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to update alert for user {user.username} in "
-                        "Grafana!"
+                detail=f"Failed to update alert {notification.name} "
+                       f"for user {user.username} in Grafana!"
             )
 
 def get_tasks_at_timepoint(
@@ -292,7 +301,7 @@ def grafana_add_or_update_user_alerts(
     db_session: Session,
     timepoint: datetime = None,
     lock_rows: bool = False
-) -> None:
+) -> list[HTTPException]:
     """
     Adds or updates Grafana alerts for given user. Also removes alerts that are
     not assigned to user. (Userful when user group is changed etc.)
@@ -301,6 +310,7 @@ def grafana_add_or_update_user_alerts(
     :param timepoint (datetime): timepoint to get tasks for
         (to update alerts with correct resource amounts)
     :param lock_rows (bool): lock rows in database until update is finished
+    :return (list[HTTPException]): list of errors
     """
     if timepoint is None:
         timepoint = datetime.now() + timedelta(
@@ -338,6 +348,8 @@ def grafana_add_or_update_user_alerts(
         folder_names=[f'{user.username}_general_alerts']
     )[0]
 
+    errors = []
+
     # add alerts to Grafana
     for notification in user_notifications:
         resource = notification.resource
@@ -368,16 +380,20 @@ def grafana_add_or_update_user_alerts(
                 folder = general_alert_folder
                 amount = None
 
-            grafana_add_or_update_alert_rule(
-                user=user,
-                node=node,
-                resource=resource,
-                notification=notification,
-                folder_uid=folder['uid'],
-                resource_amount=node_provides_resource.amount,
-                allocation_amount=amount,
-                existing_alert=existing_alert
-            )
+            try:
+                grafana_add_or_update_alert_rule(
+                    user=user,
+                    node=node,
+                    resource=resource,
+                    notification=notification,
+                    folder_uid=folder['uid'],
+                    resource_amount=node_provides_resource.amount,
+                    allocation_amount=amount,
+                    existing_alert=existing_alert
+                )
+            except HTTPException as e:
+                if e not in errors:
+                    errors.append(e)
 
             # remove update alert from user's Grafana alert list
             try:
@@ -393,11 +409,18 @@ def grafana_add_or_update_user_alerts(
                 path=f'/api/v1/provisioning/alert-rules/{alert["uid"]}'
             )
         except httpx.HTTPStatusError as e:
-            raise HTTPException(
+            er = HTTPException(
                 status_code=500,
                 detail=f"Failed to remove alert for user {user.username} "
                         "in Grafana!"
             )
+            if er not in errors:
+                errors.append(er)
+    
+    for error in errors:
+        logging.error(error.detail)
+    
+    return errors
 
 def grafana_remove_all_user_alerts(user: User) -> None:
     """
@@ -434,12 +457,13 @@ def grafana_add_alert_to_user(
     user: User,
     notification: Notification,
     db_session: Session
-) -> None:
+) -> list[HTTPException]:
     """
     Adds alert to user in Grafana. Userful when new alert is assigned to user.
     :param user (User): user to add alert for
     :param notification (Notification): notification/alert to add
     :param db_session (Session): database session to use
+    :return (list[HTTPException]): list of error messages
     """
     # check if notification is assigned to a resource
     resource = notification.resource
@@ -492,16 +516,26 @@ def grafana_add_alert_to_user(
             # set to empty dict
             amount = None
         
-        grafana_add_or_update_alert_rule(
-            user=user,
-            node=node,
-            resource=resource,
-            notification=notification,
-            folder_uid=folder['uid'],
-            resource_amount=node_provides_resource.amount,
-            allocation_amount=amount,
-            existing_alert=existing_alert
-        )
+        errors = []
+        try:
+            grafana_add_or_update_alert_rule(
+                user=user,
+                node=node,
+                resource=resource,
+                notification=notification,
+                folder_uid=folder['uid'],
+                resource_amount=node_provides_resource.amount,
+                allocation_amount=amount,
+                existing_alert=existing_alert
+            )
+        except HTTPException as e:
+            if e not in errors:
+                errors.append(e)
+        
+        for error in errors:
+            logging.error(error.detail)
+        
+        return errors
 
 def grafana_remove_alert_from_user(
     user: User,
@@ -539,11 +573,12 @@ def grafana_remove_alert_from_user(
 def update_grafana_alert_for_all_users_and_groups(
     notification: Notification,
     db_session: Session
-) -> None:
+) -> list[HTTPException]:
     """
     Updates grafana alert based on notification.
     :param notification (Notification): notification with template to update
     :param db_session (Session): database session to use
+    :return (list[HTTPException]): list of error messages
     """
     # get all users affected by notification
     users = notification.receivers_users
@@ -552,12 +587,18 @@ def update_grafana_alert_for_all_users_and_groups(
             if user not in users:
                 users.append(user)
     
+    errors = []
     for user in users:
-        grafana_add_alert_to_user(
+        e = grafana_add_alert_to_user(
             notification=notification,
             user=user,
             db_session=db_session
         )
+        for error in e:
+            if error not in errors:
+                errors.append(error)
+    
+    return errors
 
 def grafana_remove_alert_for_group(
     group: Group,
@@ -583,21 +624,28 @@ def grafana_add_alert_to_group(
     group: Group,
     notification: Notification,
     db_session: Session
-) -> None:
+) -> list[HTTPException]:
     """
     Adds alert to group.
     :param group (Group): group to add alert for
     :param notification (Notification): notification/alert to add
     :param db_session (Session): database session to use
+    :return (list[HTTPException]): list of error messages
     """
     afected_users = get_members_including_subgroups(group=group)
     
+    errors = []
     for user in afected_users:
-        grafana_add_alert_to_user(
+        e = grafana_add_alert_to_user(
             user=user,
             notification=notification,
             db_session=db_session
         )
+        for error in e:
+            if error not in errors:
+                errors.append(error)
+    
+    return errors
 
 def grafana_remove_alert(
     notification: Notification
@@ -670,4 +718,16 @@ def grafana_remove_alert_for_node(
                         "from Grafana!"
             )
 
-# TODO - add alert evaluation group on Grafana init
+def get_alert_error(errors: list[HTTPException]) -> HTTPException | None:
+    """
+    Gets error message from list of errors. Selects most severe error code
+    for the message.
+    :param errors (list[HTTPException]): list of errors
+    :return (HTTPException | None): error to raise or None
+    """
+    if errors:
+        msg = '\n'.join([error.detail for error in errors])
+        code = max([error.status_code for error in errors])
+        return HTTPException(status_code=code, detail=msg)
+
+    return None
