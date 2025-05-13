@@ -110,23 +110,66 @@ def get_user_tasks(
         ).all()
     ]
 
+def get_current_user_group_member_ids(
+    current_user: CurrentUserInfo,
+    db_session: Session
+) -> list[int]:
+    """
+    Returns ids of current user group members if users_share_statistics is true.
+    Otherwise returns id list containing only id of current user.
+    :param current_user: current user
+    :param db_session: database session
+    :return: list of user ids
+    """
+    user = db_session.scalars(select(User).where(User.id == current_user.user_id)).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.group.users_share_statistics:
+        user_ids = [user.id for user in user.group.members]
+    else:
+        user_ids = [user.id]
+    
+    return user_ids
+
 def get_active_tasks(
     pagination: TasksPaginationRequest,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> list[TaskResponseFullWithOwner]:
     """
-    Returns scheduled and running tasks owned by specified user.
+    Returns scheduled and running tasks.
+    If user is not admin, returns only tasks owned by his group members
+    if users_share_statistics is true for the group.
     """
-    tasks = db_session.scalars(
-        select(Task).where(
-            Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
-        ).order_by(
-            asc(Task.start_time)
-        ).slice(
-            pagination.page_number * pagination.page_size,
-            (pagination.page_number + 1) * pagination.page_size
+    if not current_user.is_admin:
+        user_ids = get_current_user_group_member_ids(
+            current_user=current_user,
+            db_session=db_session
         )
-    ).all()
+        
+        tasks = db_session.scalars(
+            select(Task).where(
+                Task.owner_id.in_(user_ids),
+                Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
+            ).order_by(
+                asc(Task.start_time)
+            ).slice(
+                pagination.page_number * pagination.page_size,
+                (pagination.page_number + 1) * pagination.page_size
+            )
+        ).all()
+    else:
+        tasks = db_session.scalars(
+            select(Task).where(
+                Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
+            ).order_by(
+                asc(Task.start_time)
+            ).slice(
+                pagination.page_number * pagination.page_size,
+                (pagination.page_number + 1) * pagination.page_size
+            )
+        ).all()
     return [
         generate_task_response_full_with_owner(task=task)
         for task in tasks
@@ -134,21 +177,42 @@ def get_active_tasks(
 
 def get_finished_tasks(
     pagination: TasksPaginationRequest,
+    current_user: CurrentUserInfo,
     db_session: Session
 ) -> list[TaskResponseFullWithOwner]:
     """
-    Returns finished tasks owned by specified user.
+    Returns all finished tasks.
+    If user is not admin, returns only tasks owned by his group members
+    if users_share_statistics is true for the group.
     """
-    tasks = db_session.scalars(
-        select(Task).where(
-            Task.status == TaskStatus.finished
-        ).order_by(
-            desc(Task.start_time)
-        ).slice(
-            pagination.page_number * pagination.page_size,
-            (pagination.page_number + 1) * pagination.page_size
+    if not current_user.is_admin:
+        user_ids = get_current_user_group_member_ids(
+            current_user=current_user,
+            db_session=db_session
         )
-    ).all()
+        
+        tasks = db_session.scalars(
+            select(Task).where(
+                Task.owner_id.in_(user_ids),
+                Task.status == TaskStatus.finished
+            ).order_by(
+                desc(Task.start_time)
+            ).slice(
+                pagination.page_number * pagination.page_size,
+                (pagination.page_number + 1) * pagination.page_size
+            )
+        ).all()
+    else:
+        tasks = db_session.scalars(
+            select(Task).where(
+                Task.status == TaskStatus.finished
+            ).order_by(
+                desc(Task.start_time)
+            ).slice(
+                pagination.page_number * pagination.page_size,
+                (pagination.page_number + 1) * pagination.page_size
+            )
+        ).all()
     return [
         generate_task_response_full_with_owner(task=task)
         for task in tasks

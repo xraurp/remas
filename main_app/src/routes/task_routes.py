@@ -101,9 +101,9 @@ def tasks_get_finished(
     """
     Returns finished tasks owned by user.
     """
-    ensure_admin_permissions(current_user=current_user)
     return get_finished_tasks(
         pagination=pagination,
+        current_user=current_user,
         db_session=session
     )
 
@@ -116,9 +116,9 @@ def tasks_get_active(
     """
     Returns active tasks owned by user.
     """
-    ensure_admin_permissions(current_user=current_user)
     return get_active_tasks(
         pagination=pagination,
+        current_user=current_user,
         db_session=session
     )
 
