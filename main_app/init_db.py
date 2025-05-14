@@ -54,7 +54,7 @@ def insert_default_data(engine: Engine) -> None:
         user = User(
             name="System",
             surname="Administrator",
-            email="admin@localhost",
+            email="administrator@localhost",
             username="administrator",
             password=get_password_hash("admin"),
             uid=0,
