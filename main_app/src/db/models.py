@@ -44,7 +44,7 @@ class User(SQLModel, table=True):
     uid: int = Field(unique=True, index=True, nullable=False)
     username: str = Field(unique=True, index=True, nullable=False)
     password: str
-    email: str = Field(index=True, nullable=False)  # TODO - add unique (required by Grafana)
+    email: str = Field(index=True, unique=True, nullable=False)
 
     # User is by default member of group 3 ("users")
     group_id: int = Field(default=3, foreign_key="group.id")
@@ -397,8 +397,6 @@ class Notification(SQLModel, table=True):
         ondelete="CASCADE"
     )
     resource: Resource | None = Relationship(back_populates="notifications")
-
-# TODO - add automatic reaction to events?
 
 class Limit(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
