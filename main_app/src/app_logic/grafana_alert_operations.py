@@ -496,6 +496,7 @@ def grafana_add_alert_to_user(
             folder_names=[f'{user.username}_general_alerts']
         )[0]
     
+    errors = []
     for node_provides_resource in resource.nodes:
         node = node_provides_resource.node
 
@@ -509,14 +510,13 @@ def grafana_add_alert_to_user(
 
         # add or update alert
         if resource.id in required_resources and \
-            node.id in required_resources[resource_id]:
+            node.id in required_resources[resource.id]:
             amount = required_resources[resource.id][node.id]
         else:
             # general alerts receive always None, becase required_resources is
             # set to empty dict
             amount = None
         
-        errors = []
         try:
             grafana_add_or_update_alert_rule(
                 user=user,
@@ -532,10 +532,10 @@ def grafana_add_alert_to_user(
             if e not in errors:
                 errors.append(e)
         
-        for error in errors:
-            logging.error(error.detail)
+    for error in errors:
+        logging.error(error.detail)
         
-        return errors
+    return errors
 
 def grafana_remove_alert_from_user(
     user: User,
