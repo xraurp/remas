@@ -52,10 +52,10 @@ def insert_default_data(engine: Engine) -> None:
         )
         session.add_all([everyone_group, admins, users])
         user = User(
-            name="Admin",
-            surname="Admin",
+            name="System",
+            surname="Administrator",
             email="admin@localhost",
-            username="admin",
+            username="administrator",
             password=get_password_hash("admin"),
             uid=0,
             group=admins

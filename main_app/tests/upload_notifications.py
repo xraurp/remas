@@ -59,7 +59,7 @@ def uplaod_memory_notification(token: str) -> None:
     print(json.dumps(memory_notification, indent=4))
 
 def main() -> None:
-    token = login('admin', 'admin')
+    token = login('administrator', 'admin')
     uplaod_CPU_notification(token)
     uplaod_memory_notification(token)
 

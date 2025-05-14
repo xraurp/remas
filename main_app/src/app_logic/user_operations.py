@@ -100,7 +100,7 @@ def update_user(
         if not current_user.is_admin:
             raise HTTPException(
                 status_code=403,
-                detail="Only admin can change uid!"
+                detail="Only administrators can change uid!"
             )
         db_user.uid = user.uid
 

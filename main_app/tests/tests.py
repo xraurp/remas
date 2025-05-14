@@ -17,7 +17,7 @@ def login(username: str, password: str):
 
 
 def main():
-    token = login('admin', 'admin')
+    token = login('administrator', 'admin')
 
     # Add user
     print('Adding user.')

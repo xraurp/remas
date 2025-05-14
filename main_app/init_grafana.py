@@ -14,7 +14,7 @@ def main() -> None:
     init_db_engine()
     session = Session(bind=get_db_engine())
     
-    admin = session.scalar(select(User).where(User.username == 'admin'))
+    admin = session.scalar(select(User).where(User.username == 'administrator'))
     grafana_create_or_update_user(
         user=admin,
         db_session=session,
