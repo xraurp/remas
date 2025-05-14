@@ -29,7 +29,7 @@ def upload_grafana_config(
         auth=(get_settings().grafana_username, get_settings().grafana_password),
         json=config
     )
-    # Raise error with response message with error has occured
+    # Raise error with response message if error has occured
     response.raise_for_status()
     return response
 
@@ -56,7 +56,7 @@ def get_grafana_config(path: str) -> httpx.Response:
         url=join_url_path(get_settings().grafana_url, path),
         auth=(get_settings().grafana_username, get_settings().grafana_password),
     )
-    # Raise error with response message with error has occured
+    # Raise error with response message if error has occured
     response.raise_for_status()
     return response
 
