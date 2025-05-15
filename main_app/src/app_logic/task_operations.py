@@ -304,15 +304,17 @@ def get_task(
 
 # TASK SCHEDULING
 def modify_required_resources(
-    required_nodes_resources: dict[int, dict[int, int]],
+    required_nodes_resources: dict[int, dict[int, int]] | dict[int, dict[int, dict[str, int|list[User]]]],
     task: Task,
     add: bool
 ) -> None:
     """
     Adds/removes required resources for overlaping tasks.
     Modifies data in place.
-    :param required_nodes_resources (dict[int, dict[int, int]]): dictionary of
-        required nodes and resources
+    :param required_nodes_resources (
+        dict[int, dict[int, int]] |
+        dict[int, dict[int, dict[str, int|list[User]]]]):
+        dictionary of required nodes and resources, or usage periods
     :param task (Task): task to add / remove
     :param add (bool): whether to add (True) or remove (False)
     """
@@ -321,10 +323,20 @@ def modify_required_resources(
             continue
         if ra.resource_id not in required_nodes_resources[ra.node_id]:
             continue
-        if add:
-            required_nodes_resources[ra.node_id][ra.resource_id] += ra.amount
+        # task scheduling
+        if type(required_nodes_resources[ra.node_id][ra.resource_id]) != dict:
+            if add:
+                required_nodes_resources[ra.node_id][ra.resource_id] += ra.amount
+            else:
+                required_nodes_resources[ra.node_id][ra.resource_id] -= ra.amount
+        # usage periods
         else:
-            required_nodes_resources[ra.node_id][ra.resource_id] -= ra.amount
+            if add:
+                required_nodes_resources[ra.node_id][ra.resource_id]['amount'] += ra.amount
+                required_nodes_resources[ra.node_id][ra.resource_id]['users'].append(task.owner)
+            else:
+                required_nodes_resources[ra.node_id][ra.resource_id]['amount'] -= ra.amount
+                required_nodes_resources[ra.node_id][ra.resource_id]['users'].remove(task.owner)
 
 def check_resource_availability(
     required_nodes_resources: dict[int, dict[int, int]],
@@ -601,7 +613,12 @@ def get_provided_resources(
     for node in nodes:
         for resource in node.resources:
             if resource.resource_id in node_resources[node.id]:
-                node_resources[node.id][resource.resource_id] = resource.amount
+                if type(node_resources[node.id][resource.resource_id]) != dict:
+                    node_resources[node.id][resource.resource_id] = \
+                        resource.amount
+                else:
+                    node_resources[node.id][resource.resource_id]['amount'] = \
+                        resource.amount
 
 def schedule_task(
     task: CreateTaskRequest,
@@ -873,11 +890,14 @@ def remove_tag_from_task(
         )
 
 def get_node_resources_struct_for_multiple_tasks(
-    tasks: list[Task]
-) -> dict[int, dict[int, int]]:
+    tasks: list[Task],
+    with_users: bool = True
+) -> dict[int, dict[int, int]] | dict[int, dict[int, dict[str, int|list[User]]]]:
     """
     Returns node resources struct for multiple tasks
     :param tasks (list[Task]): list of tasks
+    :param with_users (bool): whether to include users
+    :return (dict[int, dict[int, int]]): node resources
     """
     node_resources = {}
     for task in tasks:
@@ -885,7 +905,13 @@ def get_node_resources_struct_for_multiple_tasks(
             if ra.node_id not in node_resources:
                 node_resources[ra.node_id] = {}
             if ra.resource_id not in node_resources[ra.node_id]:
-                node_resources[ra.node_id][ra.resource_id] = 0
+                if with_users:
+                    node_resources[ra.node_id][ra.resource_id] = {
+                        'amount': 0,
+                        'users': []
+                    }
+                else:
+                    node_resources[ra.node_id][ra.resource_id] = 0
     return node_resources
 
 def check_same_time_event(
@@ -922,27 +948,31 @@ def check_no_resource_usage(
     return True
 
 def get_available_resources(
-    required_nodes_resources: dict[int, dict[int, int]],
+    required_nodes_resources: dict[int, dict[int, dict[str, int|list[User]]]],
     provided_node_resources: dict[int, dict[int, int]]
 ) -> list[ResourceAvailability]:
     """
     Returns list of available resources
-    :param required_nodes_resources (dict[int, dict[int, int]]): dictionary of 
-        required nodes and resources
-    :param provided_node_resources (dict[int, dict[int, int]]): dictionary of 
-        provided nodes and resources
+    :param required_nodes_resources (dict[int, dict[int, dict[str, int|list[User]]]]):
+        dictionary of required nodes and resources and users that uses the resources
+    :param provided_node_resources (dict[int, dict[int, int]]):
+        dictionary of provided nodes and resources
     :return (list[ResourceAvailability]): list of available resources
     """
     available_resources = []
     for node_id, resources in required_nodes_resources.items():
-        for resource_id, amount in resources.items():
+        for resource_id, data in resources.items():
+            amount = data['amount']
+            users = data['users']
             if amount != 0:
                 aa = provided_node_resources[node_id][resource_id] - amount
                 available_resources.append(
                     ResourceAvailability(
                         node_id=node_id,
                         resource_id=resource_id,
-                        amount=aa
+                        amount=aa,
+                        # sorted - allows simple comparison
+                        user_ids=sorted(list(set([user.id for user in users])))
                     )
                 )
     return available_resources
@@ -995,10 +1025,14 @@ def get_resource_availability_schedule(
 
     # Get required and provided node resources data structure
     required_nodes_resources = get_node_resources_struct_for_multiple_tasks(
-        tasks=tasks
+        tasks=tasks,
+        with_users=True
     )
     # Copy structure
-    provided_node_resources = deepcopy(required_nodes_resources)
+    provided_node_resources = get_node_resources_struct_for_multiple_tasks(
+        tasks=tasks,
+        with_users=False
+    )
     # Get provided node resources amounts
     get_provided_resources(
         node_resources=provided_node_resources,

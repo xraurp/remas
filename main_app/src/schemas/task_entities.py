@@ -55,8 +55,7 @@ class ResourceScheduleRequest(BaseModel):
     exclude_task_id: int | None = None
 
 class ResourceAvailability(ResourceAllocationRequest):
-    # Just change the name to match the usage
-    pass
+    user_ids: list[int]  # info about users using the resource
 
 class UsagePeriod(BaseModel):
     start_time: datetime

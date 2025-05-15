@@ -26,7 +26,6 @@ def get_users(
     """
     Returns all users.
     """
-    ensure_admin_permissions(current_user=current_user)
     return get_all_users(db_session=session)
 
 @user_route.get("/{user_id}", response_model=UserNoPassword)
