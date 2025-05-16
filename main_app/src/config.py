@@ -37,7 +37,8 @@ class Settings(BaseSettings):
         'TASK_SCHEDULER_RETRY_LIMIT_SECONDS',
         120
     )
-    # email
+    # email config required for sending notificatoins
+    # about starting and ending events
     smtp_host: str = os.environ.get('SMTP_HOST', 'localhost')
     smtp_port: int = os.environ.get('SMTP_PORT', 465)
     smtp_user: str | None = os.environ.get('SMTP_USER', '')
