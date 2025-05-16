@@ -38,6 +38,19 @@ def get_db_session_for_scheduler() -> Session:
     """
     return Session(bind=get_db_engine())
 
+def log_event_info(event: Event) -> None:
+    """
+    Logs event information.
+    :param event (Event): event to log
+    """
+    logging.info(
+        f"Notification: {event.notification.name}\n"
+        f"Receiver: {event.task.owner.email}"
+    )
+    logging.debug(
+        f"\nNotification content: {content}"
+    )
+
 def send_notification_on_event(event: Event) -> None:
     """
     Sends notification to user when event triggers it:
@@ -58,35 +71,50 @@ def send_notification_on_event(event: Event) -> None:
         task_start=event.task.start_time,
         task_end=event.task.end_time
     )
-    if get_settings().smtp_enabled:
+    if get_settings().smtp_enabled \
+    and not (
+                get_settings().smtp_user and
+                get_settings().smtp_password and
+                get_settings().smtp_from_address
+            ):
+        logging.error(
+            "SMTP is enabled, but SMTP_USER, SMTP_PASSWORD "
+            "or SMTP_FROM_ADDRESS is not set! "
+            "Notification will not be sent!"
+        )
+    elif get_settings().smtp_enabled:
         if get_settings().smtp_starttls_enabled:
             cls_smtp = smtplib.SMTP
         else:
             cls_smtp = smtplib.SMTP_SSL
-        mailsender = redmail.EmailSender(
-            host=get_settings().smtp_host,
-            port=get_settings().smtp_port,
-            username=get_settings().smtp_user,
-            password=get_settings().smtp_password,
-            use_starttls=get_settings().smtp_starttls_enabled,
-            cls_smtp=cls_smtp
+        try:
+            mailsender = redmail.EmailSender(
+                host=get_settings().smtp_host,
+                port=get_settings().smtp_port,
+                username=get_settings().smtp_user,
+                password=get_settings().smtp_password,
+                use_starttls=get_settings().smtp_starttls_enabled,
+                cls_smtp=cls_smtp
+            )
+            mailsender.send(
+                sender=f'{get_settings().smtp_from_name} '
+                    f'<{get_settings().smtp_from_address}>',
+                receivers=[event.task.owner.email],
+                subject=event.notification.name,
+                text=content
+            )
+        except Exception as e:
+            logging.error(
+                f"Error sending notification {event.notification.name} "
+                f"to {event.task.owner.email}!"
+            )
+            logging.error(traceback.format_exc())
+    else:
+        logging.warning(
+            "SMTP is not enabled, notification will not be sent!"
         )
-        mailsender.send(
-            sender=f'{get_settings().smtp_from_name} '
-                   f'<{get_settings().smtp_from_address}>',
-            receivers=[event.task.owner.email],
-            subject=event.notification.name,
-            text=content
-        )
-    logging.info(
-        f"Notification {event.notification.name} sent "
-        f"to {event.task.owner.email}"
-    )
-    logging.debug(
-        f"Notification: {event.notification.name}, "
-        f"user: {event.task.owner.email}, "
-        f"content: {content}"
-    )
+    
+    log_event_info(event=event)
 
 def process_scheduled_events(db_session: Session) -> None:
     """

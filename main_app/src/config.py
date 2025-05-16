@@ -40,10 +40,10 @@ class Settings(BaseSettings):
     # email
     smtp_host: str = os.environ.get('SMTP_HOST', 'localhost')
     smtp_port: int = os.environ.get('SMTP_PORT', 465)
-    smtp_user: str = os.environ.get('SMTP_USER')
-    smtp_password: str = os.environ.get('SMTP_PASSWORD')
+    smtp_user: str | None = os.environ.get('SMTP_USER', '')
+    smtp_password: str | None = os.environ.get('SMTP_PASSWORD', '')
     smtp_enabled: bool = os.environ.get('SMTP_ENABLED', False)
-    smtp_from_address: str = os.environ.get('SMTP_FROM_ADDRESS', smtp_user)
+    smtp_from_address: str | None = os.environ.get('SMTP_FROM_ADDRESS', smtp_user)
     smtp_from_name: str = os.environ.get('SMTP_FROM_NAME', 'REMAS')
     smtp_starttls_enabled: bool = os.environ.get('SMTP_STARTTLS_ENABLED', False)
     # grafana config
