@@ -1108,7 +1108,8 @@ def get_resource_availability_schedule(
         curent = available_resources_timeline[i]
         next = available_resources_timeline[i+1]
 
-        if curent.available_resources == next.available_resources:
+        if curent.available_resources == next.available_resources \
+        and curent.end_time == next.start_time:
             curent.end_time = next.end_time
             available_resources_timeline.pop(i+1)
         else:
