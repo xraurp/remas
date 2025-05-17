@@ -38,17 +38,18 @@ def get_db_session_for_scheduler() -> Session:
     """
     return Session(bind=get_db_engine())
 
-def log_event_info(event: Event) -> None:
+def log_event_info(event: Event, content: str) -> None:
     """
     Logs event information.
     :param event (Event): event to log
+    :param content (str): notification content
     """
     logging.info(
-        f"Notification: {event.notification.name}\n"
+        f"Notification: {event.notification.name}, "
         f"Receiver: {event.task.owner.email}"
     )
     logging.debug(
-        f"\nNotification content: {content}"
+        f"Notification content: {content}"
     )
 
 def send_notification_on_event(event: Event) -> None:
@@ -114,7 +115,7 @@ def send_notification_on_event(event: Event) -> None:
             "SMTP is not enabled, notification will not be sent!"
         )
     
-    log_event_info(event=event)
+    log_event_info(event=event, content=content)
 
 def process_scheduled_events(db_session: Session) -> None:
     """

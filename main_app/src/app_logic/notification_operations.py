@@ -485,13 +485,13 @@ def schedule_notification_events_for_task(
         # if task is has already started
         if task.status != TaskStatus.scheduled:
             return
-        start = task.start_time + timedelta(seconds=notification.time_offset)
+        start = task.start_time - timedelta(seconds=notification.time_offset)
     else:
         # do not schedule notification for end time
         # if task is has already finished
         if task.status == TaskStatus.finished:
             return
-        start = task.end_time + timedelta(seconds=notification.time_offset)
+        start = task.end_time - timedelta(seconds=notification.time_offset)
     
     # schedule the notification
     if scheduled_event:
