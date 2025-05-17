@@ -45,6 +45,20 @@ services:
       - remas
 #      - vm_pass_thru  # passthru to virtual machine network for testing
     restart: no
+  
+  remas:
+    build:
+      dockerfile: dockerfile
+    container_name: remas-main-app
+    environment:
+      TZ: "Europe/Prague"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./env_vars.sh:/remas/env_vars.sh:ro
+    networks:
+      - remas
+    restart: no
 
 # Prometheus exporters for localhost - useful for testing
 #  prometheus-process-exporter:

@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     )
     grafana_username: str = os.environ.get('GRAFANA_USERNAME', 'admin')
     grafana_password: str = os.environ.get('GRAFANA_PASSWORD', 'admin')
+    # required to show correct redirect for frontend
+    # if app is running in container, it uses diferent url - ussually docker
+    # dns record that does not work outside container
+    grafana_redirect_url: str = os.environ.get(
+        'GRAFANA_REDIRECT_URL',
+        grafana_url
+    )
 
     # grafana user system folder templates
     grafana_user_system_folder_templates: list[str] = [

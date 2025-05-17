@@ -14,8 +14,6 @@ from src.app_logic.auxiliary_operations import (
     get_members_including_subgroups
 )
 
-# TODO - query notifications when receiving group
-
 def create_group(
     group: Group,
     db_session: Session

@@ -6,6 +6,7 @@ prometheus-data/
 # Config files
 smtp.conf
 main_app/env_vars.sh
+env_vars.sh
 # Local config for services
 services-local.yaml
 prometheus/prometheus/prometheus-local.yml

@@ -47,7 +47,7 @@ async def root():
 
 @app.get('/grafana-link')
 async def get_grafana_link():
-    link = get_settings().grafana_url
+    link = get_settings().grafana_redirect_url
     return {
         'detail': link
     }
