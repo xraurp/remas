@@ -11,7 +11,6 @@ from src.app_logic.grafana_user_operations import (
     grafana_remove_user
 )
 
-# TODO - query notifications when receiving user
 
 def create_user(
     user: User,

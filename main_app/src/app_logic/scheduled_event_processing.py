@@ -15,8 +15,6 @@ import smtplib
 import traceback
 
 
-# TODO - add task dashboard to Grafana when task is started
-
 SCHEDULER = None
 JOB_ID = 'process_events'
 

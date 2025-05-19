@@ -405,13 +405,3 @@ def grafana_change_user_password(user: User, password: str) -> None:
             detail=f"Failed to change password for user {user.username} "
                     "in Grafana!"
         )
-
-
-# TODO - remove
-#from src.config import get_settings
-#from sqlmodel import create_engine, Session
-#from src.db.models import User
-#session = Session(bind=create_engine(url=get_settings().database_url))
-#user = session.get(User, 2)
-#grafana_create_or_update_user(user=user, password='test', db_session=session)
-#grafana_remove_user(user=user)

@@ -608,11 +608,8 @@ def main():
     print(json.dumps(cpu_notification_to_resource, indent=4))
 
 
-    # TODO - add time based notifications
-
     print('Thats all.')
 
-# TODO - add task scheduling tests
 
 if __name__ == '__main__':
     main()

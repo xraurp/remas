@@ -78,5 +78,3 @@ def get_folders_from_grafana(folder_names: list[str]) -> list[dict]:
         lambda f: f.get('title', '') in folder_names,
         folders
     ))
-
-# TODO - add grafana SMTP email configuration on Grafana init

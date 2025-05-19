@@ -265,12 +265,13 @@ def change_user_password(
         password=request.old_password,
         db_session=db_session
     )
-    # TODO - add some password strength estimation
+
     if len(request.new_password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Password must be at least 8 characters long!"
         )
+    
     grafana_change_user_password(user=user, password=request.new_password)
     user.password = get_password_hash(password=request.new_password)
     db_session.commit()

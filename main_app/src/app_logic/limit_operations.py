@@ -6,9 +6,6 @@ from sqlalchemy.exc import NoResultFound, IntegrityError
 from src.schemas.authentication_entities import CurrentUserInfo
 from src.app_logic.authentication import insufficientPermissionsException
 
-# TODO - when adding limit, check if node is limited by diferent
-#        limit in the same group / user
-
 def get_limit_response(limit: Limit) -> LimitResponse:
     """
     Returns limit response

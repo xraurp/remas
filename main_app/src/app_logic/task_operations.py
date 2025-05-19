@@ -40,8 +40,6 @@ from fastapi import HTTPException
 from datetime import datetime
 from copy import deepcopy
 
-# TODO - add selecting by tag
-# TODO - add get statistics by tag and share resources in groups
 
 def generate_task_response_full(task: Task) -> TaskResponseFull:
     return TaskResponseFull(
