@@ -139,37 +139,21 @@ def get_active_tasks(
 ) -> list[TaskResponseFullWithOwner]:
     """
     Returns scheduled and running tasks.
-    If user is not admin, returns only tasks owned by his group members
-    if users_share_statistics is true for the group.
+    :param pagination: pagination request with page number and page size
+    :param current_user: current user info
+    :param db_session: database session
+    :return: list of tasks that are scheduled or running
     """
-    if not current_user.is_admin:
-        user_ids = get_current_user_group_member_ids(
-            current_user=current_user,
-            db_session=db_session
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
+        ).order_by(
+            asc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
         )
-        
-        tasks = db_session.scalars(
-            select(Task).where(
-                Task.owner_id.in_(user_ids),
-                Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
-            ).order_by(
-                asc(Task.start_time)
-            ).slice(
-                pagination.page_number * pagination.page_size,
-                (pagination.page_number + 1) * pagination.page_size
-            )
-        ).all()
-    else:
-        tasks = db_session.scalars(
-            select(Task).where(
-                Task.status.in_([TaskStatus.scheduled, TaskStatus.running])
-            ).order_by(
-                asc(Task.start_time)
-            ).slice(
-                pagination.page_number * pagination.page_size,
-                (pagination.page_number + 1) * pagination.page_size
-            )
-        ).all()
+    ).all()
     return [
         generate_task_response_full_with_owner(task=task)
         for task in tasks
@@ -182,37 +166,21 @@ def get_finished_tasks(
 ) -> list[TaskResponseFullWithOwner]:
     """
     Returns all finished tasks.
-    If user is not admin, returns only tasks owned by his group members
-    if users_share_statistics is true for the group.
+    :param pagination: pagination request with page number and page size
+    :param current_user: current user info
+    :param db_session: database session
+    :return: list of finished tasks
     """
-    if not current_user.is_admin:
-        user_ids = get_current_user_group_member_ids(
-            current_user=current_user,
-            db_session=db_session
+    tasks = db_session.scalars(
+        select(Task).where(
+            Task.status == TaskStatus.finished
+        ).order_by(
+            desc(Task.start_time)
+        ).slice(
+            pagination.page_number * pagination.page_size,
+            (pagination.page_number + 1) * pagination.page_size
         )
-        
-        tasks = db_session.scalars(
-            select(Task).where(
-                Task.owner_id.in_(user_ids),
-                Task.status == TaskStatus.finished
-            ).order_by(
-                desc(Task.start_time)
-            ).slice(
-                pagination.page_number * pagination.page_size,
-                (pagination.page_number + 1) * pagination.page_size
-            )
-        ).all()
-    else:
-        tasks = db_session.scalars(
-            select(Task).where(
-                Task.status == TaskStatus.finished
-            ).order_by(
-                desc(Task.start_time)
-            ).slice(
-                pagination.page_number * pagination.page_size,
-                (pagination.page_number + 1) * pagination.page_size
-            )
-        ).all()
+    ).all()
     return [
         generate_task_response_full_with_owner(task=task)
         for task in tasks
