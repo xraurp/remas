@@ -5,9 +5,8 @@ COPY main_app /remas
 
 WORKDIR /remas
 
-# install requirements
-RUN pip install -r requirements.txt
-RUN pip cache purge
+# install requirements and remove cache files
+RUN pip install --no-cache-dir -r requirements.txt
 
 # expose application port
 EXPOSE 8000
