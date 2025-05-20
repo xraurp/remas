@@ -6,7 +6,7 @@
 export SECRET_KEY=some_super_strong_secret_key
 
 # dev mode
-export DEBUG=
+export DEBUG=false
 
 # SMTP config for main_app
 export SMTP_HOST=smtp.example.com
