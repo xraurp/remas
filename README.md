@@ -41,6 +41,7 @@ Following variables can be used to configure the application.
 - `DATABASE_URL` - URL for the database (default: postgresql://remas_main:test123@localhost:15432/remas_main_db)
 - `HOST` - IP address / host name on which the port will listen (default: 0.0.0.0)
 - `PORT` - Application port (default: 8000)
+- `CORS_ORIGINS` - List of origins for CORS correctly (default: "*").
 - `SECRET_KEY` - secret key for signing JWT tokens (required)
 - `ALGORITHM` - secret key signing algoritm (default: HS256)
 - `TOKEN_ACCESS_EXPIRE_MINUTES` - access token expiration in minutes (default: 30)
