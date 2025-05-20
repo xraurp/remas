@@ -325,7 +325,7 @@ class EventType(enum.Enum):
 
 class Event(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    name: str = Field(unique=True, index=True)
+    name: str = Field(index=True)
     description: str | None = None
     time: datetime = Field(index=True)
     type: EventType = Field(default=EventType.other)
