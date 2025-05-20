@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     )
     host: str = os.environ.get("HOST", "0.0.0.0")
     port: int = os.environ.get("PORT", 8000)
+    cors_origins: list[str] = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(',')]
     # token signing
     token_secret_key: str = os.environ.get('SECRET_KEY')
     token_signing_algorithm: str = os.environ.get('ALGORITHM', 'HS256')
