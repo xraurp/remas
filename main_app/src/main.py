@@ -43,10 +43,16 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    """
+    Root endpoint for getting the ping.
+    """
+    return {"detail": "Hello World"}
 
 @app.get('/grafana-link')
 async def get_grafana_link():
+    """
+    Endpoint for getting the link to Grafana.
+    """
     link = get_settings().grafana_redirect_url
     return {
         'detail': link
